@@ -6,12 +6,17 @@ from collections import deque
 import time
 import tracemalloc
 
-# Optional OS-level memory (RSS). Will be ignored if psutil isn't installed.
+# Import search strategies implemented in the `strategies` package
+from strategies.common import euclidean, reconstruct_path
+from strategies.dfs import run_dfs
+from strategies.bfs import run_bfs
+from strategies.gbfs import run_gbfs
+from strategies.astar import run_astar
+
 try:
     import psutil  # type: ignore
 except Exception:  # pragma: no cover - optional dependency
     psutil = None
-
 # --- 1. Define Node and Graph Classes ---
 
 class Node:
