@@ -20,13 +20,13 @@ def run_gbfs(graph):
     start_coord = graph.get_coordinates(start)
     start_h = min(euclidean(start_coord, gc) for gc in goal_coords) if start_coord is not None else float('inf')
     heapq.heappush(heap, (start_h, start, next(counter), start, None))  # (h, node_id, counter, node, parent)
+    nodes_created += 1
 
     while heap:
         _, _node_id, _cnt, node, parent = heapq.heappop(heap)
         if node in visited:
             continue
         visited.add(node)
-        nodes_created += 1
         if parent is not None:
             came_from[node] = parent
 
@@ -41,5 +41,6 @@ def run_gbfs(graph):
             to_coord = graph.get_coordinates(to_id)
             h = min(euclidean(to_coord, gc) for gc in goal_coords) if to_coord is not None else float('inf')
             heapq.heappush(heap, (h, to_id, next(counter), to_id, node))
+            nodes_created += 1  # Count every node created, even if already in frontier
 
     return None
