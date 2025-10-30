@@ -228,10 +228,18 @@ def main(filename, method, metrics_mode="none"):
                 print(metrics_line, file=sys.stderr)
         return
 
-    goal_node, nodes_created, path_list = result
+    # Accept either (node, nodes_created, path) or (node, nodes_created, path, total_cost)
+    if isinstance(result, tuple) and len(result) == 4:
+        goal_node, nodes_created, path_list, total_cost = result
+    else:
+        goal_node, nodes_created, path_list = result
     path_str = " -> ".join(str(n) for n in path_list)
     print(f"{filename} {method}")
-    print(f"{goal_node} {nodes_created}\n{path_str}")
+    print(f"Goal node reached:{goal_node}")
+    print(f"Number of Nodes visited:{nodes_created}")
+    print(f"{path_str}")
+    if total_cost is not None:
+        print(f"Total path cost:{total_cost}")
 
     # Metrics (printed separately so original stdout format remains intact)
     if metrics_mode in ("stderr", "stdout"):
