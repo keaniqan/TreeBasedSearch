@@ -3,6 +3,14 @@ import math
 import heapq
 import itertools
 from collections import deque
+import time
+import tracemalloc
+
+# Optional OS-level memory (RSS). Will be ignored if psutil isn't installed.
+try:
+    import psutil  # type: ignore
+except Exception:  # pragma: no cover - optional dependency
+    psutil = None
 
 # --- 1. Define Node and Graph Classes ---
 
@@ -123,7 +131,6 @@ def run_bfs(graph):
     return None
 
 def run_gbfs(graph):
-    """Greedy Best-First Search using Euclidean distance to nearest goal as heuristic."""
     start = graph.origin
     goals = graph.destinations
     if start is None or not goals:
@@ -290,8 +297,46 @@ class GraphReader:
 # Note: You'll need to create a text file (e.g., 'problem.txt') 
 # containing the data structure you provided in the previous prompt.
 
-def main(filename, method):
-    """Main function to run the search algorithm."""
+def _format_bytes(n_bytes: int) -> str:
+    """Human-readable bytes in KB/MB with 2 decimals."""
+    if n_bytes < 1024:
+        return f"{n_bytes} B"
+    kb = n_bytes / 1024.0
+    if kb < 1024:
+        return f"{kb:.2f} KB"
+    mb = kb / 1024.0
+    if mb < 1024:
+        return f"{mb:.2f} MB"
+    gb = mb / 1024.0
+    return f"{gb:.2f} GB"
+
+
+def _execute_with_metrics(run_fn, graph):
+    """Run a search function and collect runtime and memory metrics.
+
+    Returns: (result, runtime_seconds, peak_tracemalloc_bytes, rss_after_bytes)
+    - peak_tracemalloc_bytes: peak Python allocations measured by tracemalloc
+    - rss_after_bytes: process RSS at end (approx OS memory usage); None if psutil missing
+    """
+    # Start Python allocation tracking
+    tracemalloc.start()
+    # Optional OS RSS sampling
+    proc = psutil.Process() if psutil else None
+    t0 = time.perf_counter()
+    result = run_fn(graph)
+    dt = time.perf_counter() - t0
+    _cur, peak = tracemalloc.get_traced_memory()
+    tracemalloc.stop()
+    rss_after = proc.memory_info().rss if proc else None
+    return result, dt, peak, rss_after
+
+
+def main(filename, method, metrics_mode="none"):
+    """Main function to run the search algorithm.
+
+    metrics_mode: "none" | "stderr" | "stdout"
+    - When not "none", prints a single metrics line in addition to the original output
+    """
     
     # 1. Read and build the graph
     reader = GraphReader(filename)
@@ -308,22 +353,25 @@ def main(filename, method):
     # Choose and run the requested search method
     method = method.upper()
     if method == "DFS":
-        result = run_dfs(graph)
+        run_fn = run_dfs
     elif method == "BFS":
-        result = run_bfs(graph)
+        run_fn = run_bfs
     elif method == "GBFS":
-        result = run_gbfs(graph)
+        run_fn = run_gbfs
     elif method == "AS":
-        result = run_astar(graph)
+        run_fn = run_astar
     elif method == "CUS1":
         # Custom strategy 1 - use A*
-        result = run_astar(graph)
+        run_fn = run_astar
     elif method == "CUS2":
         # Custom strategy 2 - use Greedy Best-First
-        result = run_gbfs(graph)
+        run_fn = run_gbfs
     else:
         print(f"Unknown method: {method}")
         return
+
+    # Execute selected method with metrics
+    result, runtime_s, peak_bytes, rss_after = _execute_with_metrics(run_fn, graph)
 
     # 3. Output the result in the required format
     # Expected output:
@@ -332,23 +380,56 @@ def main(filename, method):
     if result is None:
         print(f"{filename} {method}")
         print("None 0 ")
+        # Metrics line (optional)
+        if metrics_mode in ("stderr", "stdout"):
+            metrics_line = (
+                f"Metrics: method={method} nodes_expanded=0 "
+                f"runtime_ms={(runtime_s*1000):.3f} peak_py_mem={_format_bytes(peak_bytes)}"
+                + (f" rss_now={_format_bytes(rss_after)}" if rss_after is not None else "")
+            )
+            if metrics_mode == "stdout":
+                print(metrics_line)
+            else:
+                print(metrics_line, file=sys.stderr)
         return
 
     goal_node, nodes_created, path_list = result
     path_str = " -> ".join(str(n) for n in path_list)
     print(f"{filename} {method}")
     print(f"{goal_node} {nodes_created}\n{path_str}")
+
+    # Metrics (printed separately so original stdout format remains intact)
+    if metrics_mode in ("stderr", "stdout"):
+        metrics_line = (
+            f"Metrics: method={method} nodes_expanded={nodes_created} "
+            f"runtime_ms={(runtime_s*1000):.3f} peak_py_mem={_format_bytes(peak_bytes)}"
+            + (f" rss_now={_format_bytes(rss_after)}" if rss_after is not None else "")
+        )
+        if metrics_mode == "stdout":
+            print(metrics_line)
+        else:
+            print(metrics_line, file=sys.stderr)
     
     # NOTE: You must implement the run_dfs, run_bfs, etc. functions separately.
     # NOTE: Remember to apply the tie-breaking rules[cite: 83, 84].
 
 if __name__ == "__main__":
-    # Check for correct command-line arguments (filename and method)
-    # e.g., python search.py problem.txt DFS
-    if len(sys.argv) != 3:
-        # Example for expected usage (adjust 'search.py' if you rename the file)
-        print("Usage: python search.py <filename> <method>") 
+    # Check for correct command-line arguments (filename and method[, metrics flag])
+    # e.g., python search.py problem.txt DFS --metrics
+    if len(sys.argv) not in (3, 4):
+        print("Usage: python search.py <filename> <method> [--metrics | --metrics-stdout]")
         print("Methods: DFS, BFS, GBFS, AS, CUS1, CUS2")
         sys.exit(1)
-        
-    main(sys.argv[1], sys.argv[2])
+
+    filename, method = sys.argv[1], sys.argv[2]
+    metrics_mode = "none"
+    if len(sys.argv) == 4:
+        flag = sys.argv[3].lower()
+        if flag in ("--metrics", "-m"):
+            metrics_mode = "stderr"
+        elif flag == "--metrics-stdout":
+            metrics_mode = "stdout"
+        else:
+            print(f"Warning: unknown flag '{sys.argv[3]}'. Metrics disabled.", file=sys.stderr)
+
+    main(filename, method, metrics_mode)
