@@ -17,6 +17,7 @@ try:
     import psutil  # type: ignore
 except Exception:  # pragma: no cover - optional dependency
     psutil = None
+
 # --- 1. Define Node and Graph Classes ---
 
 class Node:
