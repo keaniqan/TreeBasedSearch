@@ -7,7 +7,7 @@ from strategies.dfs import run_dfs
 from strategies.bfs import run_bfs
 from strategies.gbfs import run_gbfs
 from strategies.astar import run_astar
-from strategies.djikstra import run_dijkstra
+from strategies.dijkstra import run_dijkstra
 
 try:
     import psutil  # type: ignore
