@@ -24,7 +24,7 @@ def run_dijkstra(graph):
         # Goal check
         if node in goals:
             path = reconstruct_path(came_from, node)
-            return node, nodes_created, path
+            return node, nodes_created, path, cost
         for neighbor, edge_cost in sorted(graph.adjacency.get(node, []), key=lambda x: x[0]):
             new_cost = cost + edge_cost
             # Only add if we found a better path
