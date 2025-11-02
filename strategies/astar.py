@@ -10,7 +10,7 @@ def run_astar(graph):
         graph (Graph): The graph to search.
 
     Returns:
-        tuple: (goal_node, nodes_visited, path, path_cost) if a path is found, else None.
+        tuple: (goal_node, nodes_visited, path) if a path is found, else None.
     """
     start = graph.origin
     goals = graph.destinations
