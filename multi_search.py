@@ -300,10 +300,10 @@ if __name__ == "__main__":
     for extra in sys.argv[3:]:
         if extra.lower() in ("--metrics", "-m"):
             metrics_mode = "stderr"
-            num_runs = 1  # Run 500 times when metrics are enabled
+            num_runs = 10  # Run 500 times when metrics are enabled
         elif extra.lower() == "--metrics-stdout":
             metrics_mode = "stdout"
-            num_runs = 1  # Run 500 times when metrics are enabled
+            num_runs = 10  # Run 500 times when metrics are enabled
         elif extra.upper() in ("BF", "BRUTE", "BRUTEFORCE", "BRUTE-FORCE", "DP", "MEMO", "DP-MEMO"):
             tsp_approach = extra
         else:
