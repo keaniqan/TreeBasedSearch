@@ -9,7 +9,18 @@ def run_gbfs(graph):
     if start is None or not goals:
         return None
 
-    goal_coords = [graph.get_coordinates(g) for g in goals]
+    # Filter out goal nodes that don't exist in the graph
+    goal_coords = []
+    valid_goals = set()
+    for g in goals:
+        coords = graph.get_coordinates(g)
+        if coords is not None:
+            goal_coords.append(coords)
+            valid_goals.add(g)
+    
+    if not goal_coords:
+        return None  # No valid goals
+    
     came_from = {}
     visited = set()
     nodes_created = 0
@@ -18,7 +29,10 @@ def run_gbfs(graph):
 
     # push start with its heuristic
     start_coord = graph.get_coordinates(start)
-    start_h = min(euclidean(start_coord, gc) for gc in goal_coords) if start_coord is not None else float('inf')
+    if start_coord is None:
+        return None  # Start node doesn't exist
+        
+    start_h = min(euclidean(start_coord, gc) for gc in goal_coords)
     heapq.heappush(heap, (start_h, start, next(counter), start, None))  # (h, node_id, counter, node, parent)
     nodes_created += 1
 
@@ -30,7 +44,7 @@ def run_gbfs(graph):
         if parent is not None:
             came_from[node] = parent
 
-        if node in goals:
+        if node in valid_goals:  # Use valid_goals instead of goals
             path = reconstruct_path(came_from, node)
             return node, nodes_created, path
 
@@ -39,7 +53,9 @@ def run_gbfs(graph):
             if to_id in visited:
                 continue
             to_coord = graph.get_coordinates(to_id)
-            h = min(euclidean(to_coord, gc) for gc in goal_coords) if to_coord is not None else float('inf')
+            if to_coord is None:
+                continue  # Skip nodes without coordinates
+            h = min(euclidean(to_coord, gc) for gc in goal_coords)
             heapq.heappush(heap, (h, to_id, next(counter), to_id, node))
             nodes_created += 1  # Count every node created, even if already in frontier
 
