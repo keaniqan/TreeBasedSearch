@@ -181,11 +181,12 @@ def tsp_brute_force(graph, search_fn, important_pairs=None):
     return best_path, best_cost
 
 
-def main(filename, method, metrics_mode="none", tsp_approach="DP"):
+def main(filename, method, metrics_mode="none", tsp_approach="DP", num_runs=1):
     """Main function to run the search algorithm.
 
     metrics_mode: "none" | "stderr" | "stdout"
     - When not "none", prints a single metrics line in addition to the original output
+    num_runs: number of times to run the algorithm for averaging (default 1)
     """
     
     # 1. Read and build the graph
@@ -195,8 +196,8 @@ def main(filename, method, metrics_mode="none", tsp_approach="DP"):
     print(f"Origin: {graph.origin}")
     print(f"Destinations: {graph.destinations}")
     
-    # 2.Calculate shortest paths between every pair of key nodes using the search algorithm specified
-    #Setting the search method to the one specified in the command line
+    # 2. Calculate shortest paths between every pair of key nodes using the search algorithm specified
+    # Setting the search method to the one specified in the command line
     method = method.upper()
     if method == "DFS":
         run_fn = run_dfs
@@ -214,25 +215,44 @@ def main(filename, method, metrics_mode="none", tsp_approach="DP"):
         print(f"Unknown method: {method}")
         return
 
-    # Setting up metrics variables if metrics_mode is set
-    t_start = None
-    if metrics_mode in ("stderr", "stdout"):
-        tracemalloc.start()
-        t_start = time.perf_counter()
-
-    # Precompute pairwise shortest paths between key nodes to avoid redundant searches
-    important_pairs = precompute_pairwise(graph, run_fn)
-
     # Choose TSP solving approach: DP memoization (default) or brute-force
     tsp_key = tsp_approach.upper()
-    if tsp_key == "BRUTE":
-        result = tsp_brute_force(graph, run_fn, important_pairs=important_pairs)
-    elif tsp_key == "DP":
-        result = tsp_top_down_dp_with_memoization(graph, run_fn, important_pairs=important_pairs)
-    else:
-        print(f"Unknown TSP approach: {tsp_approach}")
-        return
+    
+    # Run the algorithm multiple times for metrics averaging
+    runtimes = []
+    peak_mems = []
+    first_result = None
+    
+    for i in range(num_runs):
+        # Start metrics tracking for this run
+        tracemalloc.start()
+        t_start = time.perf_counter()
+        
+        # Precompute pairwise shortest paths between key nodes to avoid redundant searches
+        important_pairs = precompute_pairwise(graph, run_fn)
 
+        if tsp_key == "BRUTE":
+            result = tsp_brute_force(graph, run_fn, important_pairs=important_pairs)
+        elif tsp_key == "DP":
+            result = tsp_top_down_dp_with_memoization(graph, run_fn, important_pairs=important_pairs)
+        else:
+            print(f"Unknown TSP approach: {tsp_approach}")
+            return
+        
+        # Collect metrics for this run
+        runtime_s = time.perf_counter() - t_start
+        _cur, peak_bytes = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
+        
+        runtimes.append(runtime_s)
+        peak_mems.append(peak_bytes)
+        
+        if i == 0:
+            first_result = result
+
+    # Use first run's result for output
+    result = first_result
+    
     if result is None:
         path_list = None
         cost = None
@@ -241,16 +261,20 @@ def main(filename, method, metrics_mode="none", tsp_approach="DP"):
         path_list, cost = result
         print(" -> ".join(str(n) for n in path_list))
 
-    #Printing out metrics if they are set
-    if t_start is not None:
-        runtime_s = time.perf_counter() - t_start
-        _cur, peak_bytes = tracemalloc.get_traced_memory()
-        tracemalloc.stop()
+    # Calculate and print metrics if enabled
+    if metrics_mode in ("stderr", "stdout"):
+        avg_runtime = sum(runtimes) / len(runtimes)
+        avg_peak_mem = sum(peak_mems) / len(peak_mems)
+        min_runtime = min(runtimes)
+        max_runtime = max(runtimes)
+        
         metrics_line = (
-            "METRRICS:\n"
-            f"runtime_ms ={(runtime_s*1000):.3f}\n"
-            f"peak_py_mem={FormatBytes(peak_bytes)}\n"
-            f"path_cost  ={graph.path_cost(path_list)}\n"
+            f"METRICS ({num_runs} runs):\n"
+            f"avg_runtime_ms ={avg_runtime*1000:.3f}\n"
+            f"min_runtime_ms ={min_runtime*1000:.3f}\n"
+            f"max_runtime_ms ={max_runtime*1000:.3f}\n"
+            f"avg_peak_py_mem={FormatBytes(int(avg_peak_mem))}\n"
+            f"path_cost      ={cost if cost is not None else 'N/A'}\n"
         )
         if metrics_mode == "stdout":
             print(metrics_line)
@@ -270,16 +294,19 @@ if __name__ == "__main__":
     filename, method = sys.argv[1], sys.argv[2]
     metrics_mode = "none"
     tsp_approach = "DP"
+    num_runs = 1  # Default to 1 run
 
     # parse optional args (order-flexible)
     for extra in sys.argv[3:]:
         if extra.lower() in ("--metrics", "-m"):
             metrics_mode = "stderr"
+            num_runs = 1  # Run 500 times when metrics are enabled
         elif extra.lower() == "--metrics-stdout":
             metrics_mode = "stdout"
+            num_runs = 1  # Run 500 times when metrics are enabled
         elif extra.upper() in ("BF", "BRUTE", "BRUTEFORCE", "BRUTE-FORCE", "DP", "MEMO", "DP-MEMO"):
             tsp_approach = extra
         else:
             print(f"Warning: unknown flag '{extra}'. Ignored.", file=sys.stderr)
 
-    main(filename, method, metrics_mode, tsp_approach)
+    main(filename, method, metrics_mode, tsp_approach, num_runs)
