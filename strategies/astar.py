@@ -52,7 +52,7 @@ def run_astar(graph):
                             break
                     # if an edge is missing, treat its cost as 0 (keeps behaviour safe)
                     total_cost += edge_cost if edge_cost is not None else 0
-            return node, nodes_created, path, total_cost
+            return node, nodes_created, path
 
         closed.add(node)
 

@@ -174,15 +174,12 @@ def _execute_with_metrics(run_fn, graph):
     """
     # Start Python allocation tracking
     tracemalloc.start()
-    # Optional OS RSS sampling
-    proc = psutil.Process() if psutil else None
     t0 = time.perf_counter()
     result = run_fn(graph)
     dt = time.perf_counter() - t0
     _cur, peak = tracemalloc.get_traced_memory()
     tracemalloc.stop()
-    rss_after = proc.memory_info().rss if proc else None
-    return result, dt, peak, rss_after
+    return result, dt, peak
 
 
 def main(filename, method, metrics_mode="none"):
@@ -223,57 +220,28 @@ def main(filename, method, metrics_mode="none"):
         return
 
     # Execute selected method with metrics
-    result, runtime_s, peak_bytes, rss_after = _execute_with_metrics(run_fn, graph)
-
-    # Initialize total_cost before checking it
-    total_cost = None
+    result, runtime_s, peak_bytes = _execute_with_metrics(run_fn, graph)
 
     # 3. Output the result in the required format
     # Expected output:
     # <filename> <method>
     # <goal_node> <nodes_created> <path>
+    goal_node, nodes_created, path_list, = result
     if result is None:
         print(f"{filename} {method}")
         print("None 0 ")
-        # Metrics line (optional)
-        if metrics_mode in ("stderr", "stdout"):
-            metrics_line = (
-                f"Metrics: method={method} nodes_expanded=0 "
-                f"runtime_ms={(runtime_s*1000):.3f} peak_py_mem={_format_bytes(peak_bytes)}"
-                + (f" rss_now={_format_bytes(rss_after)}" if rss_after is not None else "")
-            )
-            if metrics_mode == "stdout":
-                print(metrics_line)
-            else:
-                print(metrics_line, file=sys.stderr)
-        return
-
-    # Accept either (node, nodes_created, path) or (node, nodes_created, path, total_cost)
-    if isinstance(result, tuple) and len(result) == 4:
-        goal_node, nodes_created, path_list, total_cost = result
     else:
-        goal_node, nodes_created, path_list = result
-        # Calculate total cost from path
-        if path_list and len(path_list) > 1:
-            total_cost = graph.path_cost(path_list)
-        else:
-            total_cost = 0
-            
-    path_str = " -> ".join(str(n) for n in path_list)
-    print(f"{filename} {method}")
-    print(f"Goal node reached:{goal_node}")
-    print(f"Number of Nodes visited:{nodes_created}")
-    print(f"{path_str}")
-    if total_cost is not None:
-        print(f"Total path cost:{total_cost}")
+        print(f"{filename} {method}")
+        print(f"{goal_node} {nodes_created}")
+        print(f"{" -> ".join(str(n) for n in path_list)}")
 
     # Metrics (printed separately so original stdout format remains intact)
     if metrics_mode in ("stderr", "stdout"):
         metrics_line = (
-            f"Metrics: method={method} nodes_expanded={nodes_created} "
-            f"path_cost={total_cost if total_cost is not None else 'N/A'} "
-            f"runtime_ms={(runtime_s*1000):.3f} peak_py_mem={_format_bytes(peak_bytes)}"
-            + (f" rss_now={_format_bytes(rss_after)}" if rss_after is not None else "")
+            "METRRICS:\n"
+            f"runtime_ms ={(runtime_s*1000):.3f}\n"
+            f"peak_py_mem={_format_bytes(peak_bytes)}\n"
+            f"path_cost  ={graph.path_cost(path_list)}\n"
         )
         if metrics_mode == "stdout":
             print(metrics_line)
