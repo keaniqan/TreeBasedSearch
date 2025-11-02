@@ -1,6 +1,7 @@
 import sys
 import time
 import tracemalloc
+import itertools
 
 # Import search strategies implemented in the `strategies` package
 from util import Graph, GraphReader, FormatBytes
@@ -11,7 +12,48 @@ from strategies.astar import run_astar
 from strategies.dijkstra import run_dijkstra
 from strategies.beam import run_beam
 
-def tsp_top_down_dp_with_memoization(graph,search_fn):
+def precompute_pairwise(graph, run_fn, key_nodes=None):
+    """Precompute shortest paths and costs between all ordered pairs of key nodes.
+
+    key_nodes: iterable of node ids to consider; by default uses origin + destinations.
+    Returns a dict {(a,b): {'path': path_list, 'cost': cost}, ...}
+    """
+    if key_nodes is None:
+        key_nodes = [graph.origin] + list(graph.destinations)
+    else:
+        key_nodes = list(key_nodes)
+
+    important_pairs = {}
+
+    def _make_query_graph(src, dst):
+        q = Graph()
+        q.nodes = graph.nodes
+        q.adjacency = graph.adjacency
+        q.origin = src
+        q.destinations = {dst}
+        return q
+
+    for a, b in itertools.permutations(key_nodes, 2):
+        q = _make_query_graph(a, b)
+        result = run_fn(q)
+        if not result:
+            continue
+        if isinstance(result, tuple) and len(result) == 4:
+            goal, _n, path, cost = result
+        else:
+            goal, _n, path = result
+            try:
+                cost = graph.path_cost(path)
+            except Exception:
+                continue
+
+        if goal is None:
+            continue
+        important_pairs[(a, b)] = {"path": path, "cost": cost}
+
+    return important_pairs
+
+def tsp_top_down_dp_with_memoization(graph, search_fn, important_pairs=None):
     # Capture the full set of destinations so we don't mutate it during recursion
     all_destinations = set(graph.destinations)
     n = len(all_destinations) + 1
@@ -42,16 +84,32 @@ def tsp_top_down_dp_with_memoization(graph,search_fn):
             if next_node in visited:
                 continue
 
-            # run a single-target search on a query graph to avoid mutating the main graph
-            qg = _make_query_graph(current, next_node)
-            result = search_fn(qg)
+            # Prefer using a precomputed pairwise map when available
+            entry = None
+            if important_pairs is not None:
+                entry = important_pairs.get((current, next_node))
 
-            if result is None:
-                continue
-            goal_node, n_nodes_visited, path = result
+            if entry is not None:
+                path = entry.get("path")
+                step_cost = entry.get("cost")
+            else:
+                # fallback to running the search function for this pair
+                qg = _make_query_graph(current, next_node)
+                result = search_fn(qg)
+                if result is None:
+                    continue
+                if isinstance(result, tuple) and len(result) == 4:
+                    _goal_node, _n_nodes_visited, path, step_cost = result
+                else:
+                    _goal_node, _n_nodes_visited, path = result
+                    try:
+                        step_cost = graph.path_cost(path)
+                    except Exception:
+                        continue
+
             next_path, next_cost = dp(next_node, visited.union({next_node}))
 
-            total_cost = next_cost + graph.path_cost(path)
+            total_cost = next_cost + (step_cost if step_cost is not None else graph.path_cost(path))
             if total_cost < best[1]:
                 if next_path:
                     combined_path = path + next_path[1:]
@@ -67,8 +125,63 @@ def tsp_top_down_dp_with_memoization(graph,search_fn):
         return None
     return res
 
+def tsp_brute_force(graph, search_fn, important_pairs=None):
+    """Brute-force TSP solver.
 
-def main(filename, method, metrics_mode="none"):
+    - Computes pairwise shortest paths between the origin and all destinations using
+      the provided `search_fn` (which should accept a Graph and return (goal, n, path)
+      or (goal, n, path, cost)).
+    - Tries every permutation of the destinations and picks the minimum-cost route.
+
+    Returns (best_path_list, best_cost) or None if no complete tour exists.
+    """
+    # helper to create a query graph (single-source, single-target)
+    def _make_query_graph(src, dst):
+        q = Graph()
+        q.nodes = graph.nodes
+        q.adjacency = graph.adjacency
+        q.origin = src
+        q.destinations = {dst}
+        return q
+
+    # Use provided precomputed map if available, otherwise compute it now
+    if important_pairs is None:
+        important = precompute_pairwise(graph, search_fn)
+    else:
+        important = important_pairs
+
+    destinations = list(graph.destinations)
+    best_cost = float('inf')
+    best_path = None
+
+    # try all permutations of destinations
+    for perm in itertools.permutations(destinations):
+        cur = graph.origin
+        total_cost = 0
+        composed_path = [cur]
+        feasible = True
+        for dest in perm:
+            if (cur, dest) not in important:
+                feasible = False
+                break
+            entry = important[(cur, dest)]
+            total_cost += entry['cost']
+            # append path but avoid duplicating the starting node
+            seg = entry['path']
+            if seg:
+                composed_path += seg[1:]
+            cur = dest
+
+        if feasible and total_cost < best_cost:
+            best_cost = total_cost
+            best_path = composed_path
+
+    if best_path is None:
+        return None
+    return best_path, best_cost
+
+
+def main(filename, method, metrics_mode="none", tsp_approach="DP"):
     """Main function to run the search algorithm.
 
     metrics_mode: "none" | "stderr" | "stdout"
@@ -107,12 +220,26 @@ def main(filename, method, metrics_mode="none"):
         tracemalloc.start()
         t_start = time.perf_counter()
 
-    path_list, cost=tsp_top_down_dp_with_memoization(graph, run_fn)
-    
-    if(path_list is None):
+    # Precompute pairwise shortest paths between key nodes to avoid redundant searches
+    important_pairs = precompute_pairwise(graph, run_fn)
+
+    # Choose TSP solving approach: DP memoization (default) or brute-force
+    tsp_key = tsp_approach.upper()
+    if tsp_key == "BRUTE":
+        result = tsp_brute_force(graph, run_fn, important_pairs=important_pairs)
+    elif tsp_key == "DP":
+        result = tsp_top_down_dp_with_memoization(graph, run_fn, important_pairs=important_pairs)
+    else:
+        print(f"Unknown TSP approach: {tsp_approach}")
+        return
+
+    if result is None:
+        path_list = None
+        cost = None
         print("No possible path found")
     else:
-        print(f"{" -> ".join(str(n) for n in path_list)}")
+        path_list, cost = result
+        print(" -> ".join(str(n) for n in path_list))
 
     #Printing out metrics if they are set
     if t_start is not None:
@@ -133,20 +260,26 @@ def main(filename, method, metrics_mode="none"):
 if __name__ == "__main__":
     # Check for correct command-line arguments (filename and method[, metrics flag])
     # e.g., python multi_search.py problem.txt DFS --metrics
-    if len(sys.argv) not in (3, 4):
-        print("Usage: python multi_search.py <filename> <method> [--metrics | --metrics-stdout]")
-        print("Methods: DFS, BFS, GBFS, AS, CUS1, CUS2")
+    # Accept:
+    #   python multi_search.py <filename> <method> [<tsp_approach>] [--metrics | --metrics-stdout]
+    if len(sys.argv) < 3:
+        print("Usage: python multi_search.py <filename> <method> [<tsp_approach>] [--metrics | --metrics-stdout]")
+        print("Methods: DFS, BFS, GBFS, AS, DIJKSTRA, BEAM")
         sys.exit(1)
 
     filename, method = sys.argv[1], sys.argv[2]
     metrics_mode = "none"
-    if len(sys.argv) == 4:
-        flag = sys.argv[3].lower()
-        if flag in ("--metrics", "-m"):
-            metrics_mode = "stderr"
-        elif flag == "--metrics-stdout":
-            metrics_mode = "stdout"
-        else:
-            print(f"Warning: unknown flag '{sys.argv[3]}'. Metrics disabled.", file=sys.stderr)
+    tsp_approach = "DP"
 
-    main(filename, method, metrics_mode)
+    # parse optional args (order-flexible)
+    for extra in sys.argv[3:]:
+        if extra.lower() in ("--metrics", "-m"):
+            metrics_mode = "stderr"
+        elif extra.lower() == "--metrics-stdout":
+            metrics_mode = "stdout"
+        elif extra.upper() in ("BF", "BRUTE", "BRUTEFORCE", "BRUTE-FORCE", "DP", "MEMO", "DP-MEMO"):
+            tsp_approach = extra
+        else:
+            print(f"Warning: unknown flag '{extra}'. Ignored.", file=sys.stderr)
+
+    main(filename, method, metrics_mode, tsp_approach)
