@@ -53,6 +53,23 @@ class Graph:
         node = self.nodes.get(node_id)
         return (node.x, node.y) if node else None
 
+    def path_cost(self, path):
+        """Calculate total cost of edges in the given path."""
+        total = 0
+        for i in range(len(path) - 1):
+            from_node = path[i]
+            to_node = path[i + 1]
+            # Find the cost of edge from_node -> to_node
+            edge_cost = None
+            for neighbor, cost in self.adjacency.get(from_node, []):
+                if neighbor == to_node:
+                    edge_cost = cost
+                    break
+            if edge_cost is None:
+                return None  # Edge not found
+            total += edge_cost
+        return total
+
 # --- 2. Implement the File Reader (Parser) ---
 class GraphReader:
     """Handles parsing the problem specification file."""
@@ -236,6 +253,12 @@ def main(filename, method, metrics_mode="none"):
         goal_node, nodes_created, path_list, total_cost = result
     else:
         goal_node, nodes_created, path_list = result
+        # Calculate total cost from path
+        if path_list and len(path_list) > 1:
+            total_cost = graph.path_cost(path_list)
+        else:
+            total_cost = 0
+            
     path_str = " -> ".join(str(n) for n in path_list)
     print(f"{filename} {method}")
     print(f"Goal node reached:{goal_node}")
@@ -248,6 +271,7 @@ def main(filename, method, metrics_mode="none"):
     if metrics_mode in ("stderr", "stdout"):
         metrics_line = (
             f"Metrics: method={method} nodes_expanded={nodes_created} "
+            f"path_cost={total_cost if total_cost is not None else 'N/A'} "
             f"runtime_ms={(runtime_s*1000):.3f} peak_py_mem={_format_bytes(peak_bytes)}"
             + (f" rss_now={_format_bytes(rss_after)}" if rss_after is not None else "")
         )
