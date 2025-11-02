@@ -93,9 +93,9 @@ def main(filename, method, metrics_mode="none"):
         run_fn = run_gbfs
     elif method == "AS":
         run_fn = run_astar
-    elif method == "DIJKSTRA":
+    elif method == "CUS1":
         run_fn = run_dijkstra
-    elif method == "BEAM":
+    elif method == "CUS2":
         run_fn = run_beam
     else:
         print(f"Unknown method: {method}")
