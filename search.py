@@ -132,10 +132,10 @@ if __name__ == "__main__":
         flag = sys.argv[3].lower()
         if flag in ("--metrics", "-m"):
             metrics_mode = "stderr"
-            num_runs = 1000  # Run 100 times when metrics are enabled
+            num_runs = 10000  # Run 20000 times when metrics are enabled
         elif flag == "--metrics-stdout":
             metrics_mode = "stdout"
-            num_runs = 1000  # Run 100 times when metrics are enabled
+            num_runs = 10000  # Run 20000 times when metrics are enabled
         else:
             print(f"Warning: unknown flag '{sys.argv[3]}'. Metrics disabled.", file=sys.stderr)
 
