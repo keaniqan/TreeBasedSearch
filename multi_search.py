@@ -181,6 +181,129 @@ def tsp_brute_force(graph, search_fn, important_pairs=None):
     return best_path, best_cost
 
 
+def tsp_ant_colony(graph, important_pairs, iterations=5, ants=5, alpha=1.0, beta=2.0, rho=0.1, q=1.0):
+    """Approximate TSP solver using Ant Colony Optimization over key nodes.
+
+    Parameters:
+      graph: Graph
+      run_fn: search function used to precompute pairwise shortest paths (defaults to A*)
+      iterations, ants, alpha, beta, rho, q: ACO parameters
+
+    Returns (best_path_list, best_cost) or None if no feasible tour found.
+    """
+
+    # key nodes: origin + destinations
+    key_nodes = [graph.origin] + list(graph.destinations)
+    if len(key_nodes) <= 1:
+        return None
+
+    # distance and heuristic
+    dist = {}
+    eta = {}
+    for a, b in itertools.permutations(key_nodes, 2):
+        entry = important_pairs.get((a, b))
+        if entry is None:
+            dist[(a, b)] = float('inf')
+            eta[(a, b)] = 0.0
+        else:
+            c = entry['cost']
+            dist[(a, b)] = c
+            eta[(a, b)] = 1.0 / (c + 1e-9)
+
+    # initialize pheromones
+    tau = { (a,b): 1.0 for a,b in itertools.permutations(key_nodes, 2) }
+
+    best_overall = (None, float('inf'))
+    import random
+
+    for _it in range(iterations):
+        ants_solutions = []
+
+        for _ in range(ants):
+            current = graph.origin
+            visited = {current}
+            tour_nodes = [current]
+            feasible = True
+
+            while len(visited) < len(key_nodes):
+                candidates = [n for n in key_nodes if n not in visited]
+                if not candidates:
+                    break
+
+                weights = []
+                for nxt in candidates:
+                    t = tau.get((current, nxt), 1e-9) ** alpha
+                    h = eta.get((current, nxt), 0.0) ** beta
+                    w = t * h
+                    if dist.get((current, nxt), float('inf')) == float('inf'):
+                        w = 0.0
+                    weights.append(w)
+
+                total_w = sum(weights)
+                if total_w <= 0:
+                    feasible = False
+                    break
+
+                r = random.random() * total_w
+                acc = 0.0
+                chosen = None
+                for nxt, w in zip(candidates, weights):
+                    acc += w
+                    if r <= acc:
+                        chosen = nxt
+                        break
+                if chosen is None:
+                    chosen = candidates[-1]
+
+                visited.add(chosen)
+                tour_nodes.append(chosen)
+                current = chosen
+
+            if not feasible:
+                continue
+
+            # construct composed path and cost using precomputed segments
+            composed = [tour_nodes[0]]
+            total_cost = 0
+            valid = True
+            for i in range(len(tour_nodes)-1):
+                a = tour_nodes[i]
+                b = tour_nodes[i+1]
+                entry = important_pairs.get((a,b))
+                if entry is None:
+                    valid = False
+                    break
+                seg = entry['path']
+                if seg:
+                    composed += seg[1:]
+                total_cost += entry['cost']
+
+            if not valid:
+                continue
+
+            ants_solutions.append((composed, total_cost, tour_nodes))
+            if total_cost < best_overall[1]:
+                best_overall = (composed, total_cost)
+
+        # pheromone evaporation
+        for key in list(tau.keys()):
+            tau[key] *= (1.0 - rho)
+
+        # deposit pheromone
+        for composed, total_cost, tour_nodes in ants_solutions:
+            if total_cost <= 0:
+                continue
+            deposit = q / total_cost
+            for i in range(len(tour_nodes)-1):
+                a = tour_nodes[i]
+                b = tour_nodes[i+1]
+                tau[(a,b)] = tau.get((a,b), 0.0) + deposit
+
+    if best_overall[0] is None:
+        return None
+    return best_overall
+
+
 def main(filename, method, metrics_mode="none", tsp_approach="DP", num_runs=1):
     """Main function to run the search algorithm.
 
@@ -235,6 +358,8 @@ def main(filename, method, metrics_mode="none", tsp_approach="DP", num_runs=1):
             result = tsp_brute_force(graph, run_fn, important_pairs=important_pairs)
         elif tsp_key == "DP":
             result = tsp_top_down_dp_with_memoization(graph, run_fn, important_pairs=important_pairs)
+        elif tsp_key == "ACO":
+            result = tsp_ant_colony(graph, important_pairs)
         else:
             print(f"Unknown TSP approach: {tsp_approach}")
             return
@@ -304,7 +429,7 @@ if __name__ == "__main__":
         elif extra.lower() == "--metrics-stdout":
             metrics_mode = "stdout"
             num_runs = 10  # Run 500 times when metrics are enabled
-        elif extra.upper() in ("BF", "BRUTE", "BRUTEFORCE", "BRUTE-FORCE", "DP", "MEMO", "DP-MEMO"):
+        elif extra.upper() in ("BRUTE","DP","ACO"):
             tsp_approach = extra
         else:
             print(f"Warning: unknown flag '{extra}'. Ignored.", file=sys.stderr)
