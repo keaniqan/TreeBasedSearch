@@ -208,6 +208,9 @@ def main(filename, method, metrics_mode="none"):
     # Execute selected method with metrics
     result, runtime_s, peak_bytes, rss_after = _execute_with_metrics(run_fn, graph)
 
+    # Initialize total_cost before checking it
+    total_cost = None
+
     # 3. Output the result in the required format
     # Expected output:
     # <filename> <method>
