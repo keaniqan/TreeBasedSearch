@@ -8,6 +8,7 @@ from strategies.bfs import run_bfs
 from strategies.gbfs import run_gbfs
 from strategies.astar import run_astar
 from strategies.dijkstra import run_dijkstra
+from strategies.beam import run_beam
 
 try:
     import psutil  # type: ignore
@@ -215,9 +216,8 @@ def main(filename, method, metrics_mode="none"):
         run_fn = run_astar
     elif method == "DIJKSTRA":
         run_fn = run_dijkstra
-    elif method == "CUS2":
-        # Custom strategy 2 - use Greedy Best-First
-        run_fn = run_gbfs
+    elif method == "BEAM":
+        run_fn = run_beam
     else:
         print(f"Unknown method: {method}")
         return
