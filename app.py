@@ -10,44 +10,49 @@ def main():
     nodes=[]
     ways=[]
     cameras=[]
-    meta={}
-    
+    start = None
+    goals = []
+    accident_multiplier = None
     if(len(sys.argv)>1):
-        nodes, ways, cameras, meta = parse_config_file(sys.argv[1])
+        nodes, ways, cameras, start, goals, accident_multiplier = parse_config_file(sys.argv[1])
     # print("Nodes:", nodes)
     # print("Ways:", ways)
     # print("Cameras:", cameras)
     # print("Meta:", meta)
 
     def plot_map():
-        # Plotting the nodes/location on the map
-        fig =go.Figure(go.Scattermap(
-            lat=[nodes[n]['lat'] for n in nodes],
-            lon=[nodes[n]['lon'] for n in nodes],
-            mode='markers',
-            marker=go.scattermap.Marker(
-                size=9
-            ),
-            text=[f"ID: {n}, Label: {nodes[n]['label']}" for n in nodes],
-        ))
-
-        # #temporary generate way lines between nodes without considering road
-        # from_node = '2'
-        # to_node = '1'
-        # fig.add_trace(go.Scattermap(
-        #     lat=[nodes[from_node]['lat'], nodes[to_node]['lat']],
-        #     lon=[nodes[from_node]['lon'], nodes[to_node]['lon']],
-        #     mode='lines',
-        #     line=go.scattermap.Line(
-        #         width=2,
-        #         color='blue'
-        #     ),
-        #     hoverinfo='none'
-        # ))
+        fig =go.Figure()
 
         # For each way draw it onto the map
+        prev_from = None
+        prev_to = None
         for way in ways:
+            if way['from'] == prev_to and way['to'] == prev_from:
+                continue  #skip duplicate way
             pathing.draw_way(fig, nodes, way)
+            prev_from = way['from']
+            prev_to = way['to']
+
+        #for each node plot a marker
+        for i,node in nodes.items():
+            # Figuring out the color of the node, Green for start nodes, Red for goal nodes, Black for normal nodes
+            node_color="black"
+            if i == start:
+                node_color="green"
+            elif i in goals:
+                node_color="red"
+            fig.add_trace(go.Scattermap(
+                lat=[node['lat']],
+                lon=[node['lon']],
+                mode='markers',
+                marker=go.scattermap.Marker(
+                    size=10,
+                    color=node_color
+                ),
+                text=f"{i}: {node['label']}<br>({node['lat']}, {node['lon']})",
+                hoverinfo='text',
+                showlegend=False
+            ))
 
         # Set up the layout for the map
         fig.update_layout(
@@ -60,7 +65,7 @@ def main():
                     lon= sum(nodes[n]['lon'] for n in nodes)/len(nodes)
                 ),
                 pitch=0,
-                zoom=9
+                zoom=18
             ),
         )
         fig.update_layout(margin={"r":0,"t":0,"l":0,"b":0})

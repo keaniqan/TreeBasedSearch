@@ -39,7 +39,9 @@ def parse_config_file(path):
     nodes = {}
     ways = []
     cameras = {}
-    meta = {"start": None, "goals": [], "accident_multiplier": None}
+    start = None
+    goals = []
+    accident_multiplier = None
 
     def is_header(line):
         return line.startswith("[") and line.endswith("]")
@@ -62,15 +64,16 @@ def parse_config_file(path):
                 nodes[nid] = {"lat": lat, "lon": lon, "label": label}
 
             elif section == "[WAYS]":
-                # way_id,from_node,to_node,road_name,highway_type,travel_time_min
                 p = split_csv_allow_commas(line, 6)
                 ways.append({
-                    "way_id": p[0],
+                    "id": p[0],
                     "from": p[1],
                     "to": p[2],
-                    "road_name": p[3],
+                    "name": p[3],
                     "type": p[4],
-                    "time_min": float(p[5]),
+                    "base_time": float(p[5]),
+                    "accident_severity": 0,
+                    "final_time": float(p[5])
                 })
 
             elif section == "[CAMERAS]":
@@ -81,10 +84,10 @@ def parse_config_file(path):
                 p = [x.strip() for x in line.split(",")]
                 key = p[0].upper()
                 if key == "START":
-                    meta["start"] = p[1]
+                    start = p[1]
                 elif key == "GOAL":
-                    meta["goals"] = p[1:]
+                    goals = p[1:]
                 elif key == "ACCIDENT_MULTIPLIER":
-                    meta["accident_multiplier"] = float(p[1])
+                    accident_multiplier = float(p[1])
 
-    return nodes, ways, cameras, meta
+    return nodes, ways, cameras, start, goals, accident_multiplier
