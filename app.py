@@ -13,8 +13,8 @@ def main():
     start = None
     goals = []
     accident_multiplier = None
-    if(len(sys.argv)>1):
-        nodes, ways, cameras, start, goals, accident_multiplier = parse_config_file(sys.argv[1])
+    # if(len(sys.argv)>1):
+    nodes, ways, cameras, start, goals, accident_multiplier = parse_config_file("AI_AS2B/input.txt")
     # print("Nodes:", nodes)
     # print("Ways:", ways)
     # print("Cameras:", cameras)
