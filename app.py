@@ -6,7 +6,7 @@ import plotly.graph_objects as go
 import pathing
 from file_reader import parse_config_file
 
-def main():
+with gr.Blocks() as demo:
     nodes=[]
     ways=[]
     cameras=[]
@@ -51,7 +51,8 @@ def main():
                 ),
                 text=f"{i}: {node['label']}<br>({node['lat']}, {node['lon']})",
                 hoverinfo='text',
-                showlegend=False
+                # showlegend=False
+                # fjasldfijaslkdvlna.
             ))
 
         # Set up the layout for the map
@@ -70,12 +71,20 @@ def main():
         )
         fig.update_layout(margin={"r":0,"t":0,"l":0,"b":0})
         return fig
-
-    with gr.Blocks() as demo:
-        gr.Markdown("# Map Visualization")
-        map = gr.Plot()
-        demo.load(plot_map, inputs=None, outputs=map)
-    demo.launch()
+    
+    #Drawing the actual app
+    
+    gr.Markdown("# Map Visualization")
+    map = gr.Plot()
+    gr.DataFrame(
+        value=[[1.557108,110.3450409,'St. Thomas']], 
+        label="Nodes Data",
+        headers=["lat", "lon", "label"],
+        datatype=["number", "number", "text"],
+        show_row_numbers=True,
+        interactive=True,
+        show_search="none")
+    demo.load(plot_map, inputs=None, outputs=map)
 
 if __name__ == "__main__":
-    main()
+    demo.launch()
