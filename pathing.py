@@ -57,7 +57,7 @@ def draw_way(fig, nodes: list[dict], way: dict):
         showlegend=False
     ))
 
-def draw_path(fig, nodes: list[dict], ways:list[dict], path: list[str]):
+def draw_path(fig, nodes: list[dict], ways:list[dict], path: list[list[str]]):
     """Using plotlygraph to draw the path passed into the funciton
 
     Args:
@@ -65,5 +65,5 @@ def draw_path(fig, nodes: list[dict], ways:list[dict], path: list[str]):
         nodes (list[dict]): List of nodes given as dictionaries {'id':..., 'lat':..., 'lon':...}
         ways (list[dict]): List of ways given as dictionaries {'id':..., 'from':..., 'to':...,
             'name':..., 'type':(primary, secondary, tertiary, service), 'base_time':..., 'accident_severity':..., 'final_time':...}
-        path (list[str]): List of node ids representing the path to be drawn
+        path (list[list[str]]): List of node ids representing the path to be drawn
     """
