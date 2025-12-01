@@ -27,9 +27,9 @@ def draw_way(fig, nodes: list[dict], way: dict):
         lon=[nodes[way['from']]['lon'], nodes[way['to']]['lon']],
         mode='lines',
         name=way['name'],
-        line=go.scattermap.Line(
-            width=2,
-            color = way_color
+        line=dict(
+            width=3,
+            color=way_color
         ),
         text=hovertext,
         showlegend=False
@@ -48,7 +48,7 @@ def draw_way(fig, nodes: list[dict], way: dict):
         lat=lat_points,
         lon=lon_points,
         mode='markers',
-        marker=go.scattermap.Marker(
+        marker=dict(
             size=2,
             color='rgba(0,0,0,0)'  # invisible markers
         ),

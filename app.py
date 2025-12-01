@@ -1,10 +1,54 @@
 import sys
+import xml.etree.ElementTree as ET
 
 import gradio as gr
 import plotly.graph_objects as go
 
 import pathing
 from file_reader import parse_config_file
+
+def load_osm_graph(osm_path, assignment_nodes):
+    """Load OSM file and extract road network within bounds of assignment nodes"""
+    tree = ET.parse(osm_path)
+    root = tree.getroot()
+
+    # Get bounds from assignment nodes
+    lats = [n['lat'] for n in assignment_nodes.values()]
+    lons = [n['lon'] for n in assignment_nodes.values()]
+    min_lat, max_lat = min(lats) - 0.005, max(lats) + 0.005
+    min_lon, max_lon = min(lons) - 0.005, max(lons) + 0.005
+
+    osm_nodes = {}
+    for n in root.findall("node"):
+        nid = n.attrib["id"]
+        lat = float(n.attrib["lat"])
+        lon = float(n.attrib["lon"])
+        # Only include nodes within bounds
+        if min_lat <= lat <= max_lat and min_lon <= lon <= max_lon:
+            osm_nodes[nid] = (lat, lon)
+
+    osm_ways = []
+    for w in root.findall("way"):
+        nd_refs = [nd.attrib["ref"] for nd in w.findall("nd")]
+        tags = {t.attrib.get("k"): t.attrib.get("v") for t in w.findall("tag")}
+        if "highway" not in tags:
+            continue
+        
+        highway_type = tags.get("highway", "")
+        name = tags.get("name", "Unnamed Road")
+        
+        # Store way information with node references
+        for i in range(len(nd_refs) - 1):
+            a, b = nd_refs[i], nd_refs[i+1]
+            if a in osm_nodes and b in osm_nodes:
+                osm_ways.append({
+                    "from_osm": a,
+                    "to_osm": b,
+                    "highway_type": highway_type,
+                    "name": name
+                })
+
+    return osm_nodes, osm_ways
 
 def main():
     nodes=[]
@@ -15,6 +59,11 @@ def main():
     accident_multiplier = None
     # if(len(sys.argv)>1):
     nodes, ways, cameras, start, goals, accident_multiplier = parse_config_file("AI_AS2B/input.txt")
+    
+    # Load OSM road network (filtered to assignment area)
+    osm_nodes, osm_ways = load_osm_graph("AI_AS2B/map.osm", nodes)
+    print(f"Loaded {len(osm_nodes)} OSM nodes and {len(osm_ways)} OSM road segments (filtered)")
+    
     # print("Nodes:", nodes)
     # print("Ways:", ways)
     # print("Cameras:", cameras)
@@ -23,7 +72,43 @@ def main():
     def plot_map():
         fig =go.Figure()
 
-        # For each way draw it onto the map
+        # First, draw OSM road network in the background with lighter colors
+        osm_color_map = {
+            "primary": "#87CEEB",
+            "secondary": "#FFE4B5", 
+            "tertiary": "#FFB6C1",
+            "service": "#D3D3D3",
+            "residential": "#E0E0E0",
+            "unclassified": "#DCDCDC"
+        }
+        
+        # Draw OSM roads as background (limit to avoid performance issues)
+        for idx, osm_way in enumerate(osm_ways):
+            if idx > 2000:  # Limit to first 2000 roads for performance
+                break
+            lat1, lon1 = osm_nodes[osm_way['from_osm']]
+            lat2, lon2 = osm_nodes[osm_way['to_osm']]
+            
+            # Determine color based on highway type
+            highway_type = osm_way['highway_type'].lower()
+            color = osm_color_map.get(highway_type, "#DCDCDC")
+            
+            # Draw OSM road segments with thinner lines
+            fig.add_trace(go.Scattermap(
+                lat=[lat1, lat2],
+                lon=[lon1, lon2],
+                mode='lines',
+                line=dict(
+                    width=1,
+                    color=color
+                ),
+                hovertext=f"{osm_way['name']}<br>Type: {osm_way['highway_type']}",
+                hoverinfo='text',
+                showlegend=False,
+                opacity=0.4
+            ))
+
+        # Then draw assignment ways on top with normal colors
         prev_from = None
         prev_to = None
         for way in ways:
@@ -45,8 +130,8 @@ def main():
                 lat=[node['lat']],
                 lon=[node['lon']],
                 mode='markers',
-                marker=go.scattermap.Marker(
-                    size=10,
+                marker=dict(
+                    size=12,
                     color=node_color
                 ),
                 text=f"{i}: {node['label']}<br>({node['lat']}, {node['lon']})",
@@ -59,16 +144,17 @@ def main():
             autosize=True,
             hovermode='closest',
             map=dict(
+                style="open-street-map",
                 bearing=0,
                 center=dict(
-                    lat= sum(nodes[n]['lat'] for n in nodes)/len(nodes),
-                    lon= sum(nodes[n]['lon'] for n in nodes)/len(nodes)
+                    lat=sum(nodes[n]['lat'] for n in nodes)/len(nodes),
+                    lon=sum(nodes[n]['lon'] for n in nodes)/len(nodes)
                 ),
                 pitch=0,
-                zoom=18
+                zoom=15
             ),
+            margin={"r":0,"t":0,"l":0,"b":0}
         )
-        fig.update_layout(margin={"r":0,"t":0,"l":0,"b":0})
         return fig
 
     with gr.Blocks() as demo:
