@@ -308,3 +308,46 @@ def haversine_distance(lat1, lon1, lat2, lon2):
     c = 2 * math.asin(math.sqrt(a))
     
     return R * c
+
+################################################################################
+# find_best_path_between_nodes
+################################################################################
+def find_best_path_between_nodes(from_node, to_node, snap_candidates, road_graph):
+    """Find the best road path between two assignment nodes
+    
+    Returns:
+        tuple: (osm_path, path_length, is_straight_line)
+    """
+    try:
+        from_snaps = set(snap_candidates[from_node])
+        to_snaps = set(snap_candidates[to_node])
+        
+        # Check if snap candidates overlap (nodes very close together)
+        if from_snaps & to_snaps:
+            print(f"  Nodes {from_node} → {to_node}: OVERLAP - using straight line")
+            return None, 0, True
+        
+        # Try to find best path among candidate combinations
+        best_path = None
+        best_length = float('inf')
+        
+        for from_osm in snap_candidates[from_node][:3]:  # Try top 3
+            for to_osm in snap_candidates[to_node][:3]:
+                path = dijkstra_path(road_graph, from_osm, to_osm)
+                if path and len(path) >= 2:
+                    length = path_length_km(path, road_graph)
+                    if length < best_length:
+                        best_length = length
+                        best_path = path
+        
+        if best_path and len(best_path) >= 2:
+            print(f"  Nodes {from_node} → {to_node}: ROUTED via {len(best_path)} OSM nodes, {best_length:.3f} km")
+            return best_path, best_length, False
+        else:
+            print(f"  Nodes {from_node} → {to_node}: NO PATH - using straight line")
+            return None, 0, True
+    except Exception as e:
+        print(f"  ERROR in find_best_path_between_nodes({from_node}, {to_node}): {e}")
+        import traceback
+        traceback.print_exc()
+        return None, 0, True
