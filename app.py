@@ -24,7 +24,7 @@ def load_osm_graph(osm_path, assignment_nodes):
     tree = ET.parse(osm_path)
     root = tree.getroot()
 
-    # Get bounds from assignment nodes
+    # Get bounds from assignment nodes  
     lats = [n['lat'] for n in assignment_nodes.values()]
     lons = [n['lon'] for n in assignment_nodes.values()]
     min_lat, max_lat = min(lats) - 0.005, max(lats) + 0.005
