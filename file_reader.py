@@ -1,3 +1,4 @@
+import pandas as pd
 def split_csv_allow_commas(line, min_fields):
     parts = []
     buf = []
@@ -30,11 +31,11 @@ def parse_config_file(path):
         path (string): Filepath to the initial configuration txt file
 
     Returns:
-        nodes: List of nodes given as a diction of node id to {lat, lon, label}
-        ways: List of ways given as a list of {way_id, from, to, road_name, type, time_min}
+        nodes: Pandas DataFrame of nodes (index: node id, columns: lat, lon, label)
+        ways: Pandas DataFrame of ways (columns: id, from, to, name, type, base_time, accident_severity, final_time)
         cameras: Dictionary of camera id to way id
         meta: Dictionary of meta information including start node, goal nodes, and accident multiplier
-    """    
+    """
     section = None
     nodes = {}
     ways = []
@@ -90,4 +91,8 @@ def parse_config_file(path):
                 elif key == "ACCIDENT_MULTIPLIER":
                     accident_multiplier = float(p[1])
 
-    return nodes, ways, cameras, start, goals, accident_multiplier
+    # Convert nodes and ways to pandas DataFrames
+    nodes_df = pd.DataFrame.from_dict(nodes, orient="index")
+    nodes_df.index.name = "id"
+    ways_df = pd.DataFrame(ways)
+    return nodes_df, ways_df, cameras, start, goals, accident_multiplier
