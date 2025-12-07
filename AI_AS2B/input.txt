@@ -84,12 +84,12 @@
 
 [CAMERAS]
 # monitored roads (accident ⇒ time × ACCIDENT_MULTIPLIER)
-2001,images/cam_ajibah_abol.jpg
-2011,images/cam_main_bazaar.jpg
-2016,images/cam_taman_budaya.jpg
-2026,images/cam_satok_connector.jpg
+2001,data/cameras/cam_minor.JPEG
+2011,data/cameras/cam_moderate.png
+2016,data/cameras/cam_none.jpg
+2026,data/cameras/cam_severe.jpg
 
 [META]
-START,1
-GOAL,10,13
+START,0
+GOAL,9,12
 ACCIDENT_MULTIPLIER,3

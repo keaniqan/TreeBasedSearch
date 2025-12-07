@@ -39,7 +39,7 @@ def parse_config_file(path):
     section = None
     nodes = {}
     ways = []
-    cameras = {}
+    cameras_df = pd.DataFrame(columns=['way_id', 'image_path'])
     start = None
     goals = []
     accident_multiplier = None
@@ -62,14 +62,14 @@ def parse_config_file(path):
             if section == "[NODES]":
                 p = split_csv_allow_commas(line, 4)
                 nid, lat, lon, label = p[0], float(p[1]), float(p[2]), p[3]
-                nodes[nid] = {"lat": lat, "lon": lon, "label": label}
+                nodes[nid] = {"id": nid, "lat": lat, "lon": lon, "label": label}
 
             elif section == "[WAYS]":
                 p = split_csv_allow_commas(line, 6)
                 ways.append({
-                    "id": p[0],
-                    "from": p[1],
-                    "to": p[2],
+                    "id": int(p[0]),
+                    "from": int(p[1])-1,
+                    "to": int(p[2])-1,
                     "name": p[3],
                     "type": p[4],
                     "base_time": float(p[5]),
@@ -79,7 +79,9 @@ def parse_config_file(path):
 
             elif section == "[CAMERAS]":
                 p = split_csv_allow_commas(line, 2)
-                cameras[p[0]] = p[1]
+                cameras_df.loc[-1] = {'way_id': int(p[0]), 'image_path': p[1]}
+                cameras_df.index = cameras_df.index + 1
+                cameras_df = cameras_df.sort_index()
 
             elif section == "[META]":
                 p = [x.strip() for x in line.split(",")]
@@ -95,4 +97,4 @@ def parse_config_file(path):
     nodes_df = pd.DataFrame.from_dict(nodes, orient="index")
     nodes_df.index.name = "id"
     ways_df = pd.DataFrame(ways)
-    return nodes_df, ways_df, cameras, start, goals, accident_multiplier
+    return nodes_df, ways_df, cameras_df, start, goals, accident_multiplier

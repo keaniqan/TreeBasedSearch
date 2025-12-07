@@ -1,105 +1,49 @@
 import heapq
 import plotly.graph_objects as go
+import xml.etree.ElementTree as ET
 
-###############################################################################
-# Drawing functions
-###############################################################################
+def load_osm_file(osm_path, nodes_df):
+    """Load OSM file and extract road network within bounds of assignment nodes"""
+    tree = ET.parse(osm_path)
+    root = tree.getroot()
 
-def draw_way(fig, nodes: dict, way: dict):
-    """Using plotly graph to draw the way passed into the function
+    # Get bounds from assignment nodes  
+    lats = nodes_df['lat'].tolist()
+    lons = nodes_df['lon'].tolist()
+    min_lat, max_lat = min(lats) - 0.005, max(lats) + 0.005
+    min_lon, max_lon = min(lons) - 0.005, max(lons) + 0.005
 
-    Args:
-        fig (Figure instance): Plotly Figure instance
-        nodes (dict): Dictionary of nodes {'node_id': {'lat':..., 'lon':..., 'label':...}}
-        way (dict): Dictionary representing a way to be drawn {'id':..., 'from':..., 'to':...,
-            'name':..., 'type':(primary, secondary, tertiary, service), 'base_time':..., 
-            'accident_severity':(0-4), 'final_time':...}
-    """
-    way_color = "black"
-    if way['type'] == "primary":
-        way_color = "deepskyblue"
-    elif way['type'] == "secondary":
-        way_color = "yellow"
-    elif way['type'] == "tertiary":
-        way_color = "orange"
-    elif way['type'] == "service":
-        way_color = "slategray"
-    
-    hovertext = (f"{way['id']}: {way['name']}<br>"
-                 f"From: {way['from']}<br>"
-                 f"To: {way['to']}<br>")
-    
-    fig.add_trace(go.Scattermap(
-        lat=[nodes[way['from']]['lat'], nodes[way['to']]['lat']],
-        lon=[nodes[way['from']]['lon'], nodes[way['to']]['lon']],
-        mode='lines' ,
-        name=way['name'],
-        line=dict(
-            width=3,
-            color=way_color
-        ),
-        text=hovertext,
-        showlegend=False
-    ))
+    osm_nodes = {}
+    for n in root.findall("node"):
+        nid = n.attrib["id"]
+        lat = float(n.attrib["lat"])
+        lon = float(n.attrib["lon"])
+        # Only include nodes within bounds
+        if min_lat <= lat <= max_lat and min_lon <= lon <= max_lon:
+            osm_nodes[nid] = (lat, lon)
 
-    # Draw invisible trace marker along the path to display hovertext information along the line
-    # Interpolate an array of nodes along the way for better hover effect
-    density = 10
-    lat_points = []
-    lon_points = []
-    for i in range(density + 1):
-        frac = i / density
-        lat_points.append(nodes[way['from']]['lat'] * (1 - frac) + nodes[way['to']]['lat'] * frac)
-        lon_points.append(nodes[way['from']]['lon'] * (1 - frac) + nodes[way['to']]['lon'] * frac)
-    
-    fig.add_trace(go.Scattermap(
-        lat=lat_points,
-        lon=lon_points,
-        mode='markers',
-        marker=dict(
-            size=2,
-            color='rgba(0,0,0,0)'  # invisible markers
-        ),
-        hoverinfo='text',
-        text=hovertext,
-        showlegend=False
-    ))
+    osm_ways = []
+    for w in root.findall("way"):
+        nd_refs = [nd.attrib["ref"] for nd in w.findall("nd")]
+        tags = {t.attrib.get("k"): t.attrib.get("v") for t in w.findall("tag")}
+        if "highway" not in tags:
+            continue
+        
+        highway_type = tags.get("highway", "")
+        name = tags.get("name", "Unnamed Road")
+        
+        # Store way information with node references
+        for i in range(len(nd_refs) - 1):
+            a, b = nd_refs[i], nd_refs[i+1]
+            if a in osm_nodes and b in osm_nodes:
+                osm_ways.append({
+                    "from_osm": a,
+                    "to_osm": b,
+                    "highway_type": highway_type,
+                    "name": name
+                })
 
-
-def draw_path(fig, nodes: dict, ways: list, path: list):
-    """Using plotly graph to draw the path passed into the function
-
-    Args:
-        fig (Figure instance): Plotly Figure instance
-        nodes (dict): Dictionary of nodes {'node_id': {'lat':..., 'lon':..., 'label':...}}
-        ways (list[dict]): List of ways given as dictionaries
-        path (list): List of node ids representing the path to be drawn
-    """
-    if not path or len(path) < 2:
-        return
-    
-    # Draw the path as a thick line on top of the map
-    lat_points = [nodes[node_id]['lat'] for node_id in path]
-    lon_points = [nodes[node_id]['lon'] for node_id in path]
-    
-    fig.add_trace(go.Scattermap(
-        lat=lat_points,
-        lon=lon_points,
-        mode='lines+markers',
-        line=dict(
-            width=5,
-            color='red'
-        ),
-        marker=dict(
-            size=8,
-            color='red'
-        ),
-        name='Path',
-        hoverinfo='text',
-        text=[f"Node: {nid}" for nid in path],
-        showlegend=True
-    ))
-
+    return osm_nodes, osm_ways
 
 ###############################################################################
 # K-nearest snapping
@@ -228,21 +172,6 @@ def color_for_highway(hwy_type):
     else:
         return "orange"  # fallback color
 
-
-def get_map_center(nodes):
-    """Calculate center point of all nodes
-    
-    Args:
-        nodes (dict): Dictionary of nodes with 'lat' and 'lon' keys
-    
-    Returns:
-        tuple: (center_lat, center_lon)
-    """
-    lats = [info["lat"] for info in nodes.values()]
-    lons = [info["lon"] for info in nodes.values()]
-    return sum(lats) / len(lats), sum(lons) / len(lons)
-
-
 ###############################################################################
 # Graph building from OSM data
 ###############################################################################
@@ -352,50 +281,7 @@ def find_best_path_between_nodes(from_node, to_node, snap_candidates, road_graph
         traceback.print_exc()
         return None, 0, True
 
-def draw_osm_roads(fig, osm_ways, osm_nodes, max_roads=50):
-    """Draw OSM road network as background
-    
-    Args:
-        fig: Plotly figure object
-        osm_ways: List of OSM way dictionaries
-        osm_nodes: Dictionary of OSM nodes
-        max_roads: Maximum number of roads to draw (default 50)
-    """
-    osm_color_map = {
-        "primary": "#87CEEB",
-        "secondary": "#FFE4B5", 
-        "tertiary": "#FFB6C1",
-        "service": "#D3D3D3",
-        "residential": "#E0E0E0",
-        "unclassified": "#DCDCDC"
-    }
-    
-    print(f"\nDrawing OSM roads (max {max_roads})...")
-    
-    for idx, osm_way in enumerate(osm_ways):
-        if idx >= max_roads:
-            break
-        
-        lat1, lon1 = osm_nodes[osm_way['from_osm']]
-        lat2, lon2 = osm_nodes[osm_way['to_osm']]
-        
-        highway_type = osm_way['highway_type'].lower()
-        color = osm_color_map.get(highway_type, "#DCDCDC")
-        
-        fig.add_trace(go.Scattermap(
-            lat=[lat1, lat2],
-            lon=[lon1, lon2],
-            mode='lines',
-            line=dict(width=1, color=color),
-            hovertext=f"{osm_way['name']}<br>Type: {osm_way['highway_type']}",
-            hoverinfo='text',
-            showlegend=False,
-            opacity=0.4
-        ))
-    
-    print(f"Drew {min(len(osm_ways), max_roads)} OSM roads")
-
-def draw_snap_connections(fig, nodes, snap_candidates, osm_nodes):
+def draw_snap_connections(fig, nodes_df, snap_candidates, osm_nodes):
     """Draw dotted lines from assignment nodes to their nearest snap points
     
     Args:
@@ -406,7 +292,7 @@ def draw_snap_connections(fig, nodes, snap_candidates, osm_nodes):
     """
     print(f"\nDrawing snap connections...")
     
-    for node_id, node_info in nodes.items():
+    for node_id, node in nodes_df.iterrows():
         if node_id in snap_candidates and snap_candidates[node_id]:
             nearest_snap = snap_candidates[node_id][0]  # Get nearest snap point
             snap_lat, snap_lon = osm_nodes[nearest_snap]
@@ -418,8 +304,8 @@ def draw_snap_connections(fig, nodes, snap_candidates, osm_nodes):
             
             for j in range(num_dots):
                 t = j / (num_dots - 1)
-                lat_interp = node_info['lat'] + t * (snap_lat - node_info['lat'])
-                lon_interp = node_info['lon'] + t * (snap_lon - node_info['lon'])
+                lat_interp = node['lat'] + t * (snap_lat - node['lat'])
+                lon_interp = node['lon'] + t * (snap_lon - node['lon'])
                 lats_dotted.append(lat_interp)
                 lons_dotted.append(lon_interp)
                 if j < num_dots - 1:
@@ -452,10 +338,8 @@ def draw_snap_connections(fig, nodes, snap_candidates, osm_nodes):
                 hoverinfo='text',
                 showlegend=False
             ))
-    
-    print(f"Drew snap connections for {len(nodes)} nodes")
 
-def draw_assignment_ways(fig, ways, nodes, osm_nodes, snap_candidates, road_graph, show=True):
+def draw_assignment_ways(fig, ways_df, nodes_df, osm_nodes, snap_candidates, road_graph, show=True):
     """Draw assignment ways on the map
     
     Args:
@@ -467,16 +351,10 @@ def draw_assignment_ways(fig, ways, nodes, osm_nodes, snap_candidates, road_grap
         road_graph: Road graph for pathfinding
         show: Boolean, if False skip drawing (default True)
     """
-    if not show:
-        print(f"\nSkipping assignment ways")
-        return
-    
     prev_from = None
     prev_to = None
     
-    print(f"\nDrawing {len(ways)} assignment ways...")
-    
-    for way_idx, way in enumerate(ways):
+    for way_idx, way in ways_df.iterrows():
         try:
             if way['from'] == prev_to and way['to'] == prev_from:
                 continue
@@ -501,18 +379,19 @@ def draw_assignment_ways(fig, ways, nodes, osm_nodes, snap_candidates, road_grap
                 way_color = "slategray"
             
             if is_straight or osm_path is None:
-                segment_lats = [nodes[from_id]['lat'], nodes[to_id]['lat']]
-                segment_lons = [nodes[from_id]['lon'], nodes[to_id]['lon']]
-                hovertext = (f"{way['id']}: {way['name']}<br>"
-                            f"From: {from_id}<br>To: {to_id}<br>"
-                            f"(Straight line - nodes too close)")
+                segment_lats = [nodes_df.loc[from_id]['lat'], nodes_df.loc[to_id]['lat']]
+                segment_lons = [nodes_df.loc[from_id]['lon'], nodes_df.loc[to_id]['lon']]
             else:
                 segment_lats = [osm_nodes[nid][0] for nid in osm_path]
                 segment_lons = [osm_nodes[nid][1] for nid in osm_path]
-                hovertext = (f"{way['id']}: {way['name']}<br>"
-                            f"From: {from_id}<br>To: {to_id}<br>"
-                            f"Road distance: {path_len:.3f} km<br>"
-                            f"OSM nodes: {len(osm_path)}")
+
+                
+            #Formating hovertext for way type, accident severity and times
+            hovertext = (
+                f"<b>{way['id']}: {way['name']}</b><br>"
+                f"<b>Type</b>: {way['type']}<br>"
+                f"<b>Accident Severity</b>: {way['accident_severity']}<br>"
+                f"<b>Time</b>: {way['final_time']} mins<br>")
             
             fig.add_trace(go.Scattermap(
                 lat=segment_lats,
@@ -531,8 +410,6 @@ def draw_assignment_ways(fig, ways, nodes, osm_nodes, snap_candidates, road_grap
             print(f"\n!!! ERROR drawing way {way_idx}: {e}")
             import traceback
             traceback.print_exc()
-    
-    print(f"Drew {len(ways)} assignment ways")
 
 path = {"nodes": [], "time": 0}
 paths = []
@@ -560,13 +437,13 @@ def separate_paths(paths):
     
     return main_path, alternate_paths
 
-def draw_paths(fig, paths_list, nodes, osm_nodes, snap_candidates, road_graph):
+def draw_paths(fig, paths_list, nodes_df, osm_nodes, snap_candidates, road_graph):
     """Draw main and alternate paths on the map
     
     Args:
         fig: Plotly figure object
         paths_list: List of path dicts [{"nodes": [...], "time": ...}] sorted by time
-        nodes: Dictionary of assignment nodes
+        nodes_df: DataFrame of assignment nodes
         osm_nodes: Dictionary of OSM nodes
         snap_candidates: Dictionary mapping node IDs to snap candidates
         road_graph: Road graph for pathfinding
@@ -597,8 +474,8 @@ def draw_paths(fig, paths_list, nodes, osm_nodes, snap_candidates, road_graph):
                 )
                 
                 if is_straight or osm_path is None:
-                    segment_lats = [nodes[from_id]['lat'], nodes[to_id]['lat']]
-                    segment_lons = [nodes[from_id]['lon'], nodes[to_id]['lon']]
+                    segment_lats = [nodes_df.loc[from_id, 'lat'], nodes_df.loc[to_id, 'lat']]
+                    segment_lons = [nodes_df.loc[from_id, 'lon'], nodes_df.loc[to_id, 'lon']]
                 else:
                     segment_lats = [osm_nodes[nid][0] for nid in osm_path]
                     segment_lons = [osm_nodes[nid][1] for nid in osm_path]
@@ -643,8 +520,8 @@ def draw_paths(fig, paths_list, nodes, osm_nodes, snap_candidates, road_graph):
                 )
                 
                 if is_straight or osm_path is None:
-                    segment_lats = [nodes[from_id]['lat'], nodes[to_id]['lat']]
-                    segment_lons = [nodes[from_id]['lon'], nodes[to_id]['lon']]
+                    segment_lats = [nodes_df.loc[from_id, 'lat'], nodes_df.loc[to_id, 'lat']]
+                    segment_lons = [nodes_df.loc[from_id, 'lon'], nodes_df.loc[to_id, 'lon']]
                 else:
                     segment_lats = [osm_nodes[nid][0] for nid in osm_path]
                     segment_lons = [osm_nodes[nid][1] for nid in osm_path]
@@ -663,7 +540,8 @@ def draw_paths(fig, paths_list, nodes, osm_nodes, snap_candidates, road_graph):
                 mode='lines',
                 line=dict(
                     width=6,
-                    color='#1E90FF'  # Dodger blue (main route)
+                    color = '#FF0000'  # Red color for main route
+                    # color='#1E90FF'  # Dodger blue (main route)
                 ),
                 name=f'Main Route (time: {main_path["time"]:.1f})',
                 hoverinfo='text',
