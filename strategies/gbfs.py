@@ -2,25 +2,46 @@ import heapq
 import itertools
 from strategies.common import euclidean, reconstruct_path
 
-def run_gbfs(graph):
-    """Greedy Best-First Search using Euclidean distance to nearest goal as heuristic."""
-    start = graph.origin
-    goals = graph.destinations
+def run_gbfs(nodes_df, ways_df, start, goals):
+    """Greedy Best-First Search using Euclidean distance to nearest goal as heuristic, with DataFrames."""
+    # Convert start and goals to int if possible
+    try:
+        start = int(start)
+        goals = set(int(g) for g in goals)
+    except Exception:
+        goals = set(goals)
+
     if start is None or not goals:
         return None
 
-    # Filter out goal nodes that don't exist in the graph
+    # Build adjacency list from ways_df
+    adjacency = {}
+    for _, row in ways_df.iterrows():
+        from_id = int(row['from'])
+        to_id = int(row['to'])
+        if from_id not in adjacency:
+            adjacency[from_id] = []
+        adjacency[from_id].append((to_id, 1))  # GBFS ignores cost, so just use 1
+
+    # Helper to get coordinates from nodes_df
+    def get_coordinates(node_id):
+        try:
+            row = nodes_df.loc[int(node_id)]
+            return (row['lat'], row['lon'])
+        except Exception:
+            return None
+
+    # Filter out goal nodes that don't exist in the nodes_df
     goal_coords = []
     valid_goals = set()
     for g in goals:
-        coords = graph.get_coordinates(g)
+        coords = get_coordinates(g)
         if coords is not None:
             goal_coords.append(coords)
             valid_goals.add(g)
-    
     if not goal_coords:
         return None  # No valid goals
-    
+
     came_from = {}
     visited = set()
     nodes_created = 0
@@ -28,10 +49,10 @@ def run_gbfs(graph):
     heap = []
 
     # push start with its heuristic
-    start_coord = graph.get_coordinates(start)
+    start_coord = get_coordinates(start)
     if start_coord is None:
         return None  # Start node doesn't exist
-        
+
     start_h = min(euclidean(start_coord, gc) for gc in goal_coords)
     heapq.heappush(heap, (start_h, start, next(counter), start, None))  # (h, node_id, counter, node, parent)
     nodes_created += 1
@@ -44,15 +65,15 @@ def run_gbfs(graph):
         if parent is not None:
             came_from[node] = parent
 
-        if node in valid_goals:  # Use valid_goals instead of goals
+        if node in valid_goals:
             path = reconstruct_path(came_from, node)
             return node, nodes_created, path
 
         # expand neighbors: push in ascending id order so insertion order reflects ascending ids
-        for to_id, _cost in sorted(graph.adjacency.get(node, []), key=lambda x: x[0]):
+        for to_id, _ in sorted(adjacency.get(node, []), key=lambda x: x[0]):
             if to_id in visited:
                 continue
-            to_coord = graph.get_coordinates(to_id)
+            to_coord = get_coordinates(to_id)
             if to_coord is None:
                 continue  # Skip nodes without coordinates
             h = min(euclidean(to_coord, gc) for gc in goal_coords)

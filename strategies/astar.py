@@ -2,22 +2,43 @@ import heapq
 import itertools
 from strategies.common import euclidean, reconstruct_path
 
-def run_astar(graph):
-    """Performs a search through the graph to find the shortest path from a source
-    to a target node using A* star algorithm.
-
-    Args:
-        graph (Graph): The graph to search.
-
-    Returns:
-        tuple: (goal_node, nodes_visited, path) if a path is found, else None.
+def run_astar(nodes_df, ways_df, start, goals):
     """
-    start = graph.origin
-    goals = graph.destinations
-    if start is None or not goals:
-        return None
+    Performs A* search to find the shortest path from start to any of the goal nodes.
+    Args:
+        nodes_df: DataFrame of nodes (index: node id, columns: lat, lon, label)
+        ways_df: DataFrame of ways (columns: id, from, to, name, type, base_time, accident_severity, final_time)
+        start: start node id (string or int)
+        goals: list or set of goal node ids (string or int)
+    Returns:
+        (goal_node, nodes_created, path) or None
+    """
+    # Convert start and goals to int if possible
+    try:
+        start = int(start)
+        goals = set(int(g) for g in goals)
+    except Exception:
+        goals = set(goals)
 
-    goal_coords = [graph.get_coordinates(g) for g in goals]
+    # Build adjacency list from ways_df
+    adjacency = {}
+    for _, row in ways_df.iterrows():
+        from_id = int(row['from'])
+        to_id = int(row['to'])
+        cost = float(row['final_time']) if 'final_time' in row else float(row['base_time'])
+        if from_id not in adjacency:
+            adjacency[from_id] = []
+        adjacency[from_id].append((to_id, cost))
+
+    # Helper to get coordinates from nodes_df
+    def get_coordinates(node_id):
+        try:
+            row = nodes_df.loc[int(node_id)]
+            return (row['lat'], row['lon'])
+        except Exception:
+            return None
+
+    goal_coords = [get_coordinates(g) for g in goals]
 
     g_score = {start: 0}
     came_from = {}
@@ -26,7 +47,7 @@ def run_astar(graph):
     counter = itertools.count()
     heap = []
 
-    start_coord = graph.get_coordinates(start)
+    start_coord = get_coordinates(start)
     start_h = min(euclidean(start_coord, gc) for gc in goal_coords) if start_coord is not None else float('inf')
     heapq.heappush(heap, (start_h, start, next(counter), start))
 
@@ -38,30 +59,16 @@ def run_astar(graph):
 
         if node in goals:
             path = reconstruct_path(came_from, node)
-            # compute total path cost by summing edge costs along the path
-            total_cost = 0
-            if len(path) > 1:
-                for i in range(len(path) - 1):
-                    frm = path[i]
-                    to = path[i + 1]
-                    # find edge cost from frm -> to
-                    edge_cost = None
-                    for tid, c in graph.adjacency.get(frm, []):
-                        if tid == to:
-                            edge_cost = c
-                            break
-                    # if an edge is missing, treat its cost as 0 (keeps behaviour safe)
-                    total_cost += edge_cost if edge_cost is not None else 0
             return node, nodes_created, path
 
         closed.add(node)
 
-        for to_id, cost in sorted(graph.adjacency.get(node, []), key=lambda x: x[0]):
+        for to_id, cost in sorted(adjacency.get(node, []), key=lambda x: x[0]):
             tentative_g = g_score.get(node, float('inf')) + cost
             if tentative_g < g_score.get(to_id, float('inf')):
                 g_score[to_id] = tentative_g
                 came_from[to_id] = node
-                to_coord = graph.get_coordinates(to_id)
+                to_coord = get_coordinates(to_id)
                 h = min(euclidean(to_coord, gc) for gc in goal_coords) if to_coord is not None else float('inf')
                 f_score = tentative_g + h
                 heapq.heappush(heap, (f_score, to_id, next(counter), to_id))
