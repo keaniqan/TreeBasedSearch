@@ -3,7 +3,17 @@ import tensorflow as tf
 # Global variable to hold the loaded model
 model = None
 
-def clasify_accident(image_path)-> int:
+
+def load_model(file_path: str):
+    """
+    Loads a Keras model from the specified file path and saves it to the global variable 'model'.
+    Args:
+        file_path (str): Path to the Keras model file
+    """  
+    global model
+    model = tf.keras.models.load_model(file_path)
+
+def clasify_accident(image_path:str, debug:bool=False)-> int:
     """Clasify the image passed
     Using a image recognition model clasify the severity of the car crash captured
     in the image. The accident severity is classified in 4 levels:
@@ -13,6 +23,7 @@ def clasify_accident(image_path)-> int:
         3 - Severe Accident
     Args:
         image_path (string): Path to image
+        debug (bool): If True, print debug information
 
     Returns:
         int: Severity of the accident (0-3)
@@ -28,32 +39,25 @@ def clasify_accident(image_path)-> int:
     img_array = tf.keras.applications.efficientnet_v2.preprocess_input(img_array)
 
     predictions = model.predict(img_array)
-    print(predictions)
+    if debug:
+        print(f"Predictions: {predictions}")
     severity = tf.argmax(predictions[0]).numpy()
     return severity
 
-def load_model(file_path):
-    """
-    Loads a Keras model from the specified file path and saves it to the global variable 'model'.
-    Args:
-        file_path (str): Path to the .keras model file
-    """
-    global model
-    model = tf.keras.models.load_model(file_path)
-    model.compile(optimizer=tf.keras.optimizers.Adam(1e-5),
-             loss=tf.keras.losses.CategoricalCrossentropy(),
-             metrics=["accuracy"])
-
 #main runner for command line testing
 if __name__ == "__main__":
-    import sys
-    if len(sys.argv) != 3:
-        print("Usage: python image_classification.py <model_path> <image_path>")
-        sys.exit(1)
+    import argparse
+    parser = argparse.ArgumentParser(description="Classify accident severity from an image using a pre-trained model.")
+    parser.add_argument("model_path", type=str, help="Path to the Keras model file")
+    parser.add_argument("image_path", type=str, help="Path to the image file")
+    parser.add_argument("--debug", action="store_true", help="Enable debug mode")
+    args = parser.parse_args()
 
-    model_path = sys.argv[1]
-    image_path = sys.argv[2]
 
+    model_path = args.model_path
+    image_path = args.image_path
+    debug = args.debug
+    
     load_model(model_path)
-    severity = clasify_accident(image_path)
+    severity = clasify_accident(image_path, debug=debug)
     print(f"Accident Severity: {severity}")
