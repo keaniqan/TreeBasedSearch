@@ -39,8 +39,10 @@ def pathFindingMap(nodes_df, ways_df, start, goals, accident_multiplier, is_show
             continue
 
         #use iamge_recognition module to get accident severity
-        accident_severity = image_classification.clasify_accident(camera['image_path'])
+        accident_severity, predictions = image_classification.clasify_accident(camera['image_path'])
         print(f"Camera {cam_id} on way {way_id} detected accident severity {accident_severity}")
+        cameras_df.at[cam_id, 'accident_severity'] = accident_severity
+        cameras_df.at[cam_id, 'predictions'] = predictions.tolist()
         ways_df.loc[ways_df['id'] == way_id, 'accident_severity'] = accident_severity
         ways_df.loc[ways_df['id'] == way_id, 'final_time'] = ways_df.loc[ways_df['id'] == way_id, 'base_time'] * (1 + accident_severity * accident_multiplier)
 
@@ -155,8 +157,27 @@ def pathFindingMap(nodes_df, ways_df, start, goals, accident_multiplier, is_show
             itemwidth=30,
             y=0.9)
     )
-    return fig,ways_df, paths_df
-        
+
+    #hiding and showing the appropriate cameras
+    camera_severity_updates = [gr.Number(visible=False) for _ in range(30)]
+    camera_predictions_updates = [gr.Textbox(visible=False) for _ in range(30)]
+    camera_way_updates = [gr.Number(visible=False) for _ in range(30)]
+    camera_image_updates = [gr.Image(visible=False) for _ in range(30)]
+    row_id=0
+    for cam_id, camera in cameras_df.iterrows():
+        camera_way_updates[row_id] = gr.Number(visible=True, value=camera['way_id'])
+        camera_severity_updates[row_id] = gr.Number(visible=True, value=camera['accident_severity'])
+        camera_predictions_updates[row_id] = gr.Textbox(visible=True, value=", ".join([f"{x:.2f}" for x in camera['predictions']]))
+        camera_image_updates[row_id] = gr.Image(visible=True, value=camera['image_path'])
+        row_id+=1
+    return [fig,ways_df, paths_df]+camera_way_updates+camera_severity_updates+camera_predictions_updates+camera_image_updates
+
+#globals for dynamic gradio components
+camera_way_rows = []
+camera_severity_rows = []
+camera_predictions_rows = []
+camera_image_rows = []
+
 #gradio interface
 with gr.Blocks() as demo:
     with gr.Column():
@@ -180,12 +201,18 @@ with gr.Blocks() as demo:
             value=ways_df, interactive=True, datatype=["number", "number", "number", "text", "text", "number", "text", "number"]
         )
     with gr.Tab("Cameras"):
-        for camers in cameras_df.itertuples():
+        for i in range(30):
             with gr.Row():
-                gr.Textbox(value=str(camers.Index), label="Camera ID", interactive=False)
-                gr.Number(value=camers.way_id, label="Way ID", interactive=True)
-                gr.Image(value=camers.image_path, label="Camera Image", interactive=True)
-    demo.load(pathFindingMap,[nodes, ways, inp_start, inp_goals, inp_accident_multiplier, is_show_ways],[map,ways, paths_out])
-    btn.click(pathFindingMap,[nodes, ways, inp_start, inp_goals, inp_accident_multiplier, is_show_ways],[map,ways, paths_out])
+                with gr.Row():
+                    way = gr.Number(value=0, label="Way ID", interactive=False)
+                    severity = gr.Number(value=0, label="Accident Severity", interactive=False)
+                    predictions = gr.Textbox(value="[]", label="Predictions (none, minor, moderate, severe)",min_width=30, interactive=False)
+                image = gr.Image(type="filepath", label="Image Path", interactive=False)
+            camera_way_rows.append(way)
+            camera_severity_rows.append(severity)
+            camera_predictions_rows.append(predictions)
+            camera_image_rows.append(image)
+    demo.load(pathFindingMap,[nodes, ways, inp_start, inp_goals, inp_accident_multiplier, is_show_ways],[map,ways, paths_out]+camera_way_rows+camera_severity_rows+camera_predictions_rows+camera_image_rows)
+    btn.click(pathFindingMap,[nodes, ways, inp_start, inp_goals, inp_accident_multiplier, is_show_ways],[map,ways, paths_out]+camera_way_rows+camera_severity_rows+camera_predictions_rows+camera_image_rows)
 if __name__ == "__main__":
     demo.launch()
