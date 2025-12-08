@@ -1,6 +1,7 @@
 import heapq
 import plotly.graph_objects as go
 import xml.etree.ElementTree as ET
+import constants
 
 def load_osm_file(osm_path, nodes_df):
     """Load OSM file and extract road network within bounds of assignment nodes"""
@@ -370,13 +371,13 @@ def draw_assignment_ways(fig, ways_df, nodes_df, osm_nodes, snap_candidates, roa
             
             way_color = "black"
             if way['type'] == "primary":
-                way_color = "deepskyblue"
+                way_color = constants.PRIMARY_ROAD_COLOR
             elif way['type'] == "secondary":
-                way_color = "yellow"
+                way_color = constants.SECONDARY_ROAD_COLOR
             elif way['type'] == "tertiary":
-                way_color = "orange"
+                way_color = constants.TERTIARY_ROAD_COLOR
             elif way['type'] == "service":
-                way_color = "slategray"
+                way_color = constants.SERVICE_ROAD_COLOR
             
             if is_straight or osm_path is None:
                 segment_lats = [nodes_df.loc[from_id]['lat'], nodes_df.loc[to_id]['lat']]
@@ -397,7 +398,7 @@ def draw_assignment_ways(fig, ways_df, nodes_df, osm_nodes, snap_candidates, roa
                 lat=segment_lats,
                 lon=segment_lons,
                 mode='lines',
-                line=dict(width=4 if not is_straight else 3, color=way_color),
+                line=dict(width=constants.PATH_LINE_WIDTH if not is_straight else constants.PATH_LINE_WIDTH-1, color=way_color),
                 hovertext=hovertext,
                 hoverinfo='text',
                 showlegend=False
@@ -442,7 +443,7 @@ def draw_paths(fig, paths_list, nodes_df, osm_nodes, snap_candidates, road_graph
     
     Args:
         fig: Plotly figure object
-        paths_list: List of path dicts [{"nodes": [...], "time": ...}] sorted by time
+        paths_list: List of path dicts [{"path_name": ..., "goal": ..., "nodes": [...], "time": ...}]
         nodes_df: DataFrame of assignment nodes
         osm_nodes: Dictionary of OSM nodes
         snap_candidates: Dictionary mapping node IDs to snap candidates
@@ -451,102 +452,64 @@ def draw_paths(fig, paths_list, nodes_df, osm_nodes, snap_candidates, road_graph
     if not paths_list or len(paths_list) == 0:
         return
     
-    print(f"\nPlotting {len(paths_list)} paths...")
-    
-    # Separate main path and alternates
-    main_path, alternate_paths = separate_paths(paths_list)
+    #Sort path by time (ascending)
+    paths_list = sorted(paths_list, key=lambda p: p['time'])
+
+    def draw(path, path_index):
+        if(path['time'] == float('inf')):
+            return  # Skip paths with no valid route
+
+        route_ids = path['nodes']
+        print(f"\nPath {path_index}: {route_ids} (time: {path['time']})")
+        
+        #Generate lat/lon lists for the full path
+        all_lats = []
+        all_lons = []
+        for i in range(len(route_ids) - 1):
+            from_id = route_ids[i]
+            to_id = route_ids[i + 1]
+            
+            osm_path, path_len, is_straight = find_best_path_between_nodes(
+                from_id, to_id, snap_candidates, road_graph
+            )
+            
+            if is_straight or osm_path is None:
+                segment_lats = [nodes_df.loc[from_id, 'lat'], nodes_df.loc[to_id, 'lat']]
+                segment_lons = [nodes_df.loc[from_id, 'lon'], nodes_df.loc[to_id, 'lon']]
+            else:
+                segment_lats = [osm_nodes[nid][0] for nid in osm_path]
+                segment_lons = [osm_nodes[nid][1] for nid in osm_path]
+            
+            if all_lats:
+                all_lats.extend(segment_lats[1:])
+                all_lons.extend(segment_lons[1:])
+            else:
+                all_lats.extend(segment_lats)
+                all_lons.extend(segment_lons)
+        
+        #Genrate color based on path index
+        if path_index == 0:
+            line_color = constants.PRIMARY_PATH_COLOR  # Blue for main path
+        else:
+            line_color = constants.SECONDARY_PATH_COLOR  # Light blue for alternate paths
+
+        fig.add_trace(go.Scattermap(
+            lat=all_lats,
+            lon=all_lons,
+            mode='lines',
+            line=dict(
+                width=constants.PATH_LINE_WIDTH if path_index == 0 else (constants.ROAD_LINE_WIDTH-1),
+                color=line_color
+            ),
+            name=f'{path["path_name"]}(Time: {path["time"]:.1f})',
+            hoverinfo='text',
+            text=f'{path["path_name"]}<br>Time: {path["time"]:.1f}',
+            showlegend=True
+        ))
     
     # Draw alternate paths first (so main path appears on top)
-    for idx, alt_path in enumerate(alternate_paths):
-        route_ids = alt_path['nodes']
-        print(f"\nAlternate path {idx + 1}: {route_ids} (time: {alt_path['time']})")
-        
-        if len(route_ids) >= 2:
-            all_lats = []
-            all_lons = []
-            
-            for i in range(len(route_ids) - 1):
-                from_id = route_ids[i]
-                to_id = route_ids[i + 1]
-                
-                osm_path, path_len, is_straight = find_best_path_between_nodes(
-                    from_id, to_id, snap_candidates, road_graph
-                )
-                
-                if is_straight or osm_path is None:
-                    segment_lats = [nodes_df.loc[from_id, 'lat'], nodes_df.loc[to_id, 'lat']]
-                    segment_lons = [nodes_df.loc[from_id, 'lon'], nodes_df.loc[to_id, 'lon']]
-                else:
-                    segment_lats = [osm_nodes[nid][0] for nid in osm_path]
-                    segment_lons = [osm_nodes[nid][1] for nid in osm_path]
-                
-                if all_lats:
-                    all_lats.extend(segment_lats[1:])
-                    all_lons.extend(segment_lons[1:])
-                else:
-                    all_lats.extend(segment_lats)
-                    all_lons.extend(segment_lons)
-            
-            # Draw alternate path with lighter blue
-            fig.add_trace(go.Scattermap(
-                lat=all_lats,
-                lon=all_lons,
-                mode='lines',
-                line=dict(
-                    width=5,
-                    color='#ADD8E6'  # Light blue like Google Maps
-                ),
-                name=f'Alternate {idx + 1} (time: {alt_path["time"]:.1f})',
-                hoverinfo='text',
-                text=f'Alternate path {idx + 1}<br>Time: {alt_path["time"]:.1f}<br>Points: {len(all_lats)}',
-                showlegend=True
-            ))
+    for idx, alt_path in enumerate(paths_list[1:]):
+        draw(alt_path, idx+1)
+    draw(paths_list[0], 0)  # Draw main path last
     
-    # Draw main path (fastest)
-    if main_path:
-        route_ids = main_path['nodes']
-        print(f"\nMain path: {route_ids} (time: {main_path['time']})")
-        
-        if len(route_ids) >= 2:
-            all_lats = []
-            all_lons = []
-            
-            for i in range(len(route_ids) - 1):
-                from_id = route_ids[i]
-                to_id = route_ids[i + 1]
-                
-                osm_path, path_len, is_straight = find_best_path_between_nodes(
-                    from_id, to_id, snap_candidates, road_graph
-                )
-                
-                if is_straight or osm_path is None:
-                    segment_lats = [nodes_df.loc[from_id, 'lat'], nodes_df.loc[to_id, 'lat']]
-                    segment_lons = [nodes_df.loc[from_id, 'lon'], nodes_df.loc[to_id, 'lon']]
-                else:
-                    segment_lats = [osm_nodes[nid][0] for nid in osm_path]
-                    segment_lons = [osm_nodes[nid][1] for nid in osm_path]
-                
-                if all_lats:
-                    all_lats.extend(segment_lats[1:])
-                    all_lons.extend(segment_lons[1:])
-                else:
-                    all_lats.extend(segment_lats)
-                    all_lons.extend(segment_lons)
-            
-            # Draw main path with darker blue
-            fig.add_trace(go.Scattermap(
-                lat=all_lats,
-                lon=all_lons,
-                mode='lines',
-                line=dict(
-                    width=6,
-                    color = '#FF0000'  # Red color for main route
-                    # color='#1E90FF'  # Dodger blue (main route)
-                ),
-                name=f'Main Route (time: {main_path["time"]:.1f})',
-                hoverinfo='text',
-                text=f'Main route<br>Time: {main_path["time"]:.1f}<br>Points: {len(all_lats)}',
-                showlegend=True
-            ))
-    
-    print(f"Drew {len(paths_list)} paths (1 main + {len(alternate_paths)} alternates)")
+    print(f"Drew {len(paths_list)} paths (1 main + {len(paths_list) - 1} alternates)")
