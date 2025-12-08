@@ -5,7 +5,12 @@ import file_reader
 import pathing
 import image_classification
 
+from strategies.dfs import run_dfs
+from strategies.bfs import run_bfs
+from strategies.gbfs import run_gbfs
+from strategies.astar import run_astar
 from strategies.dijkstra import run_dijkstra
+from strategies.beam import run_beam
 
 # ============================
 # Initialization stuff
@@ -14,7 +19,7 @@ from strategies.dijkstra import run_dijkstra
 init_nodes_df, ways_df, cameras_df, start, goals, accident_multiplier = file_reader.parse_config_file("AI_AS2B\\input.txt")
 image_classification.load_model("models\\best_finetuned.keras")
 
-def pathFindingMap(nodes_df, ways_df, start, goals, accident_multiplier):
+def pathFindingMap(nodes_df, ways_df, start, goals, accident_multiplier, is_show_ways=False):
     fig = go.Figure()
     paths_df = pd.DataFrame(columns=['path', 'time'])
 
@@ -43,11 +48,18 @@ def pathFindingMap(nodes_df, ways_df, start, goals, accident_multiplier):
     # PATH FINDING MAP PROCESSING
     # ===========================================
     temp_paths = []
-    #using dijakstra to find path
-    goal, nodes_created, path = run_dijkstra(nodes_df, ways_df, start, goals)
-    if path is not None:
+    def add_path(path_name:str, goal: int, path: list[int]):
+        if path is None:
+            temp_paths.append({
+                'path_name': path_name,
+                'goal': goal,
+                'nodes': [],
+                'time': float('inf')
+            })
+            return
         temp_paths.append({
-            'Goal': goal,
+            'path_name': path_name,
+            'goal': goal,
             'nodes': path,
             'time': sum(
                 ways_df[
@@ -57,11 +69,31 @@ def pathFindingMap(nodes_df, ways_df, start, goals, accident_multiplier):
                 for i in range(len(path)-1)
             )
         })
+    #Using A* to find path
+    goal, nodes_created, path = run_astar(nodes_df, ways_df, start, goals)
+    add_path("A*", goal, path)
+    #Using Beam Search to find path
+    goal, nodes_created, path = run_beam(nodes_df, ways_df, start, goals, beam_width=3)
+    add_path("Beam Search", goal, path)
+    #Using BFS to find path
+    goal, nodes_created, path = run_bfs(nodes_df, ways_df, start, goals)
+    add_path("BFS", goal, path)
+    #Using DFS to find path
+    goal, nodes_created, path = run_dfs(nodes_df, ways_df, start, goals)
+    add_path("DFS", goal, path)
+    #using dijakstra to find path
+    goal, nodes_created, path = run_dijkstra(nodes_df, ways_df, start, goals)
+    add_path("Dijkstra", goal, path)
+     #Using GBFS to find path
+    goal, nodes_created, path = run_gbfs(nodes_df, ways_df, start, goals)
+    add_path("GBFS", goal, path)
+
     # Populate paths dataframe for display
-    paths_df = pd.DataFrame(temp_paths, columns=['Goal', 'nodes', 'time'])
+    paths_df = pd.DataFrame(temp_paths, columns=['path_name','goal', 'nodes', 'time'])
     paths_df = paths_df.sort_values(by='time').reset_index(drop=True)
     paths_df['nodes'] = paths_df['nodes'].apply(lambda p: " -> ".join(str(n) for n in p))
-    paths_df.rename(columns={'nodes': 'Path', 'time': 'Total Time (mins)'}, inplace=True)
+    paths_df.replace(float('inf'), 'No Path Found', inplace=True)
+    paths_df.rename(columns={'path_name':'Path Name', 'goal': 'Goal', 'nodes': 'Path', 'time': 'Total Time (mins)'}, inplace=True)
     
 
     #OSM road network initilization
@@ -75,7 +107,8 @@ def pathFindingMap(nodes_df, ways_df, start, goals, accident_multiplier):
 
     # Draw ways
     pathing.draw_snap_connections(fig, nodes_df, snap_candidates, osm_nodes)
-    pathing.draw_assignment_ways(fig, ways_df, nodes_df, osm_nodes, snap_candidates, osm_graph)
+    if is_show_ways:
+        pathing.draw_assignment_ways(fig, ways_df, nodes_df, osm_nodes, snap_candidates, osm_graph)
 
     #Drawing the actual paths found
     pathing.draw_paths(fig, temp_paths, nodes_df, osm_nodes, snap_candidates, osm_graph)
@@ -87,7 +120,7 @@ def pathFindingMap(nodes_df, ways_df, start, goals, accident_multiplier):
         elif idx in goals:
             node_color = "red"
         else:
-            node_color = "blue"
+            node_color = "black"
         
         fig.add_trace(go.Scattermap(
             lat=[node['lat']],
@@ -117,29 +150,42 @@ def pathFindingMap(nodes_df, ways_df, start, goals, accident_multiplier):
             pitch=0,
             zoom=15
         ),
-        margin={"r": 0, "t": 0, "l": 0, "b": 0}
+        margin={"r": 0, "t": 0, "l": 0, "b": 0},
+        legend=dict(
+            itemwidth=30,
+            y=0.9)
     )
     return fig,ways_df, paths_df
         
 #gradio interface
 with gr.Blocks() as demo:
     with gr.Column():
-        map = gr.Plot()
-        paths_out = gr.DataFrame(interactive=False, label="Found Paths")
+        with gr.Row():
+            map = gr.Plot()
+        with gr.Row():
+            paths_out = gr.DataFrame(interactive=False, label="Found Paths")
         with gr.Row():
             inp_start = gr.Number(value=start, label="Start Node ID", interactive=True)
             inp_goals = gr.Textbox(value=", ".join(goals), label="Goal Node IDs (comma separated)", interactive=True)
-        inp_accident_multiplier = gr.Number(value=accident_multiplier, label="Accident Multiplier", interactive=True)
+            inp_accident_multiplier = gr.Number(value=accident_multiplier, label="Accident Multiplier", interactive=True)
+        with gr.Row():
+            is_show_ways = gr.Checkbox(value=True, label="Show Ways", interactive=True)
         btn = gr.Button(value="Generate path")
     with gr.Tab("Nodes"):
         nodes = gr.Dataframe(
-            value=init_nodes_df, label="Nodes", interactive=True, datatype=["number", "number", "text"]
+            value=init_nodes_df, interactive=True, datatype=["number", "number", "text"]
         )
     with gr.Tab("Ways"):
         ways = gr.Dataframe(
-            value=ways_df, label="Ways", interactive=True, datatype=["number", "number", "number", "text", "text", "number", "text", "number"]
+            value=ways_df, interactive=True, datatype=["number", "number", "number", "text", "text", "number", "text", "number"]
         )
-    demo.load(pathFindingMap,[nodes, ways, inp_start, inp_goals, inp_accident_multiplier],[map,ways, paths_out])
-    btn.click(pathFindingMap,[nodes, ways, inp_start, inp_goals, inp_accident_multiplier],[map,ways, paths_out])
+    with gr.Tab("Cameras"):
+        for camers in cameras_df.itertuples():
+            with gr.Row():
+                gr.Textbox(value=str(camers.Index), label="Camera ID", interactive=False)
+                gr.Number(value=camers.way_id, label="Way ID", interactive=True)
+                gr.Image(value=camers.image_path, label="Camera Image", interactive=True)
+    demo.load(pathFindingMap,[nodes, ways, inp_start, inp_goals, inp_accident_multiplier, is_show_ways],[map,ways, paths_out])
+    btn.click(pathFindingMap,[nodes, ways, inp_start, inp_goals, inp_accident_multiplier, is_show_ways],[map,ways, paths_out])
 if __name__ == "__main__":
     demo.launch()
