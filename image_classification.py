@@ -27,6 +27,7 @@ def clasify_accident(image_path:str, debug:bool=False)-> int:
 
     Returns:
         int: Severity of the accident (0-3)
+        list: Raw prediction scores from the model
     """
     global model
     if model is None:
@@ -39,10 +40,8 @@ def clasify_accident(image_path:str, debug:bool=False)-> int:
     img_array = tf.keras.applications.efficientnet_v2.preprocess_input(img_array)
 
     predictions = model.predict(img_array)
-    if debug:
-        print(f"Predictions: {predictions}")
     severity = tf.argmax(predictions[0]).numpy()
-    return severity
+    return severity, predictions[0]
 
 #main runner for command line testing
 if __name__ == "__main__":
@@ -50,7 +49,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Classify accident severity from an image using a pre-trained model.")
     parser.add_argument("model_path", type=str, help="Path to the Keras model file")
     parser.add_argument("image_path", type=str, help="Path to the image file")
-    parser.add_argument("--debug", action="store_true", help="Enable debug mode")
     args = parser.parse_args()
 
 
@@ -59,5 +57,6 @@ if __name__ == "__main__":
     debug = args.debug
     
     load_model(model_path)
-    severity = clasify_accident(image_path, debug=debug)
+    severity, predictions = clasify_accident(image_path, debug=debug)
     print(f"Accident Severity: {severity}")
+    print(f"Predictions: {predictions}")
