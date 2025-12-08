@@ -30,7 +30,7 @@ class ReloadHandler(PatternMatchingEventHandler):
     def __init__(self):
         # Monitor all .py files except autoreload.py
         super().__init__(
-            patterns=['*.py'],
+            patterns=['app.py','image_classification.py','file_reader.py','pathing.py','strategies/dfs.py','strategies/bfs.py','strategies/gbfs.py','strategies/astar.py','strategies/dijkstra.py','strategies/beam.py'],
             ignore_patterns=['autoreload.py'],
             ignore_directories=True,
             case_sensitive=False
