@@ -18,7 +18,7 @@ def draw_line_ways(fig, ways_df, nodes_df):
         segment_lats = [nodes_df.loc[from_id]['lat'], nodes_df.loc[to_id]['lat']]
         segment_lons = [nodes_df.loc[from_id]['lon'], nodes_df.loc[to_id]['lon']]
         
-        fig.add_trace(go.Scattermapbox(
+        fig.add_trace(go.Scattermap(  # Changed from Scattermapbox
             lat=segment_lats,
             lon=segment_lons,
             mode='lines',
@@ -37,14 +37,13 @@ def draw_line_path(fig, path_node_ids, nodes_df):
     path_lats = [nodes_df.loc[nid]['lat'] for nid in path_node_ids]
     path_lons = [nodes_df.loc[nid]['lon'] for nid in path_node_ids]
     
-    fig.add_trace(go.Scattermapbox(
+    fig.add_trace(go.Scattermap(  # Changed from Scattermapbox
         lat=path_lats,
         lon=path_lons,
         mode='lines',
         line=dict(width=4, color='red'),
         showlegend=False
     ))
-
 def load_osm_file(osm_path, nodes_df):
     """Load OSM file and extract road network within bounds of assignment nodes"""
     tree = ET.parse(osm_path)
