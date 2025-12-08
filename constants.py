@@ -8,3 +8,7 @@ SECONDARY_PATH_COLOR = "#ADD8E6"
 
 PATH_LINE_WIDTH      = 8
 ROAD_LINE_WIDTH      = 4
+
+# AI Model Constants
+# List of available AI models. Add on more models here as needed.
+ENUM_AI_MODELS       =["EfficientNetV2B0", "ResNet50"]

@@ -2,18 +2,26 @@ import tensorflow as tf
 
 # Global variable to hold the loaded model
 model = None
+preprocess = None
 
-
-def load_model(file_path: str):
+def load_model(model_type: str):
     """
     Loads a Keras model from the specified file path and saves it to the global variable 'model'.
     Args:
         file_path (str): Path to the Keras model file
     """  
-    global model
+    global model, preprocess
+    # Based on the models defined in constants.ENUM_AI_MODELS load the appropriate model
+    if(model_type == "EfficientNetV2B0"):
+        file_path = "models/best_finetuned.keras"
+        preprocess = tf.keras.applications.efficientnet_v2.preprocess_input
+    elif(model_type == "ResNet50"):#TOOD: TEMPORARARY TESTING, REPLACE WITH ACTUAL MODEL LATER
+        file_path = "models\\best_frozen.keras"
+        preprocess = tf.keras.applications.efficientnet_v2.preprocess_input
     model = tf.keras.models.load_model(file_path)
+    print(f"✅ Model '{model_type}' loaded from {file_path}")
 
-def clasify_accident(image_path:str, debug:bool=False)-> int:
+def clasify_accident(image_path:str)-> int:
     """Clasify the image passed
     Using a image recognition model clasify the severity of the car crash captured
     in the image. The accident severity is classified in 4 levels:
@@ -37,7 +45,7 @@ def clasify_accident(image_path:str, debug:bool=False)-> int:
     img = tf.keras.preprocessing.image.load_img(image_path, target_size=(224, 224))
     img_array = tf.keras.preprocessing.image.img_to_array(img)
     img_array = tf.expand_dims(img_array, axis=0)  # Add batch dimension at axis 0
-    img_array = tf.keras.applications.efficientnet_v2.preprocess_input(img_array)
+    img_array = preprocess(img_array)
 
     predictions = model.predict(img_array)
     severity = tf.argmax(predictions[0]).numpy()
@@ -47,16 +55,15 @@ def clasify_accident(image_path:str, debug:bool=False)-> int:
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Classify accident severity from an image using a pre-trained model.")
-    parser.add_argument("model_path", type=str, help="Path to the Keras model file")
+    parser.add_argument("model_type", type=str, help="Type of the model to load (e.g., EfficientNetV2B0)")
     parser.add_argument("image_path", type=str, help="Path to the image file")
     args = parser.parse_args()
 
 
-    model_path = args.model_path
+    model_type = args.model_type
     image_path = args.image_path
-    debug = args.debug
     
-    load_model(model_path)
-    severity, predictions = clasify_accident(image_path, debug=debug)
+    load_model(model_type)
+    severity, predictions = clasify_accident(image_path)
     print(f"Accident Severity: {severity}")
     print(f"Predictions: {predictions}")

@@ -4,6 +4,8 @@ import plotly.graph_objects as go
 import file_reader
 import pathing
 import image_classification
+import constants
+import argparse
 
 from strategies.dfs import run_dfs
 from strategies.bfs import run_bfs
@@ -16,8 +18,21 @@ from strategies.beam import run_beam
 # Initialization stuff
 # ============================
 # Load initial configuration
-init_nodes_df, ways_df, cameras_df, start, goals, accident_multiplier = file_reader.parse_config_file("AI_AS2B\\input.txt")
-image_classification.load_model("models\\best_finetuned.keras")
+init_nodes_df = pd.DataFrame(columns = ['id','lat', 'lon', 'label'])
+ways_df = pd.DataFrame(columns = ['id', 'from', 'to', 'name', 'type', 'base_time', 'accident_severity', 'final_time'])
+cameras_df = pd.DataFrame(columns = ['way_id', 'image_path', 'accident_severity', 'predictions'])
+start = 0
+goals = []
+accident_multiplier = 0.0
+
+image_classification.load_model(constants.ENUM_AI_MODELS[0])
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config', help='Initial configuration file', default='AI_AS2B\\input.txt')
+    
+    args = parser.parse_args()
+    config = args.config
+    init_nodes_df, ways_df, cameras_df, start, goals, accident_multiplier = file_reader.parse_config_file(config)
 
 def pathFindingMap(nodes_df, ways_df, start, goals, accident_multiplier, is_show_ways=False):
     fig = go.Figure()
@@ -190,6 +205,7 @@ with gr.Blocks() as demo:
             inp_goals = gr.Textbox(value=", ".join(goals), label="Goal Node IDs (comma separated)", interactive=True)
             inp_accident_multiplier = gr.Number(value=accident_multiplier, label="Accident Multiplier", interactive=True)
         with gr.Row():
+            inp_ai_model = gr.Dropdown(choices=constants.ENUM_AI_MODELS, value=constants.ENUM_AI_MODELS[0], label="AI Model for Image Classification", interactive=True)
             is_show_ways = gr.Checkbox(value=True, label="Show Ways", interactive=True)
         btn = gr.Button(value="Generate path")
     with gr.Tab("Nodes"):
@@ -212,7 +228,7 @@ with gr.Blocks() as demo:
             camera_severity_rows.append(severity)
             camera_predictions_rows.append(predictions)
             camera_image_rows.append(image)
+    inp_ai_model.change(image_classification.load_model, inp_ai_model, None)
     demo.load(pathFindingMap,[nodes, ways, inp_start, inp_goals, inp_accident_multiplier, is_show_ways],[map,ways, paths_out]+camera_way_rows+camera_severity_rows+camera_predictions_rows+camera_image_rows)
     btn.click(pathFindingMap,[nodes, ways, inp_start, inp_goals, inp_accident_multiplier, is_show_ways],[map,ways, paths_out]+camera_way_rows+camera_severity_rows+camera_predictions_rows+camera_image_rows)
-if __name__ == "__main__":
-    demo.launch()
+demo.launch()
