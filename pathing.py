@@ -3,6 +3,48 @@ import plotly.graph_objects as go
 import xml.etree.ElementTree as ET
 import constants
 
+def draw_line_ways(fig, ways_df, nodes_df):
+    """Draw simple straight line ways on the map for visualization
+    
+    Args:
+        fig: Plotly figure object
+        ways_df: DataFrame of ways
+        nodes_df: DataFrame of nodes
+    """
+    for way_idx, way in ways_df.iterrows():
+        from_id = way['from']
+        to_id = way['to']
+        
+        segment_lats = [nodes_df.loc[from_id]['lat'], nodes_df.loc[to_id]['lat']]
+        segment_lons = [nodes_df.loc[from_id]['lon'], nodes_df.loc[to_id]['lon']]
+        
+        fig.add_trace(go.Scattermapbox(
+            lat=segment_lats,
+            lon=segment_lons,
+            mode='lines',
+            line=dict(width=2, color='blue'),
+            showlegend=False
+        ))
+
+def draw_line_path(fig, path_node_ids, nodes_df):
+    """Draw a simple straight line path on the map for visualization
+    
+    Args:
+        fig: Plotly figure object
+        path_node_ids: List of node IDs representing the path
+        nodes_df: DataFrame of nodes
+    """
+    path_lats = [nodes_df.loc[nid]['lat'] for nid in path_node_ids]
+    path_lons = [nodes_df.loc[nid]['lon'] for nid in path_node_ids]
+    
+    fig.add_trace(go.Scattermapbox(
+        lat=path_lats,
+        lon=path_lons,
+        mode='lines',
+        line=dict(width=4, color='red'),
+        showlegend=False
+    ))
+
 def load_osm_file(osm_path, nodes_df):
     """Load OSM file and extract road network within bounds of assignment nodes"""
     tree = ET.parse(osm_path)
