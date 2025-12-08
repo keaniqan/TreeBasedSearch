@@ -398,7 +398,7 @@ def draw_assignment_ways(fig, ways_df, nodes_df, osm_nodes, snap_candidates, roa
                 lat=segment_lats,
                 lon=segment_lons,
                 mode='lines',
-                line=dict(width=constants.PATH_LINE_WIDTH if not is_straight else constants.PATH_LINE_WIDTH-1, color=way_color),
+                line=dict(width=constants.ROAD_LINE_WIDTH if not is_straight else constants.ROAD_LINE_WIDTH-1, color=way_color),
                 hovertext=hovertext,
                 hoverinfo='text',
                 showlegend=False
@@ -498,7 +498,7 @@ def draw_paths(fig, paths_list, nodes_df, osm_nodes, snap_candidates, road_graph
             lon=all_lons,
             mode='lines',
             line=dict(
-                width=constants.PATH_LINE_WIDTH if path_index == 0 else (constants.ROAD_LINE_WIDTH-1),
+                width=constants.PATH_LINE_WIDTH if path_index == 0 else constants.PATH_LINE_WIDTH-1,
                 color=line_color
             ),
             name=f'{path["path_name"]}(Time: {path["time"]:.1f})',
