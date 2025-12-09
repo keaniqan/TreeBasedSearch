@@ -4,6 +4,7 @@ import plotly.graph_objects as go
 import file_reader
 import pathing
 import image_classification
+import os
 import constants
 import argparse
 
@@ -17,6 +18,11 @@ from strategies.beam import run_beam
 # ============================
 # Initialization stuff
 # ============================
+# Get list of available test case files
+TEST_CASES_FOLDER = "Test_Cases_Map"
+available_files = [f for f in os.listdir(TEST_CASES_FOLDER) if f.endswith('.txt')]
+default_file = "default.txt" if "default.txt" in available_files else available_files[0]
+
 # Load initial configuration
 init_nodes_df = pd.DataFrame(columns = ['id','lat', 'lon', 'label'])
 ways_df = pd.DataFrame(columns = ['id', 'from', 'to', 'name', 'type', 'base_time', 'accident_severity', 'final_time'])
@@ -33,6 +39,12 @@ if __name__ == "__main__":
     args = parser.parse_args()
     config = args.config
     init_nodes_df, ways_df, cameras_df, start, goals, accident_multiplier = file_reader.parse_config_file(config)
+
+def load_config_file(filename):
+    """Load a configuration file and return the data"""
+    filepath = os.path.join(TEST_CASES_FOLDER, filename)
+    nodes_df, ways_df, cameras_df, start, goals, accident_multiplier = file_reader.parse_config_file(filepath)
+    return nodes_df, ways_df, start, ", ".join(map(str, goals)), accident_multiplier
 
 def pathFindingMap(nodes_df, ways_df, start, goals, accident_multiplier, is_show_ways=False):
     fig = go.Figure()
@@ -157,6 +169,7 @@ def pathFindingMap(nodes_df, ways_df, start, goals, accident_multiplier, is_show
     fig.update_layout(
         autosize=True,
         hovermode='closest',
+        height=800,
         map=dict(
             style="open-street-map",
             bearing=0,
@@ -165,7 +178,7 @@ def pathFindingMap(nodes_df, ways_df, start, goals, accident_multiplier, is_show
                 lon=sum(nodes_df['lon']) / len(nodes_df)
             ),
             pitch=0,
-            zoom=15
+            zoom=15.5,    
         ),
         margin={"r": 0, "t": 0, "l": 0, "b": 0},
         legend=dict(
@@ -193,6 +206,87 @@ camera_severity_rows = []
 camera_predictions_rows = []
 camera_image_rows = []
 
+def clearMap(nodes_df, ways_df, start, goals, accident_multiplier, is_show_ways=False):
+    """Create a map with only nodes, no paths"""
+    fig = go.Figure()
+    
+    #processing inputs
+    start = int(start)
+    goals = [int(g.strip()) for g in goals.split(",") if g.strip().isdigit()]
+    
+    #OSM road network initilization
+    osm_nodes, osm_ways =  pathing.load_osm_file("AI_AS2B\\map.osm", nodes_df)
+    osm_graph = pathing.build_road_graph(osm_nodes, osm_ways)
+    snap_candidates = {}
+    for nid, node in nodes_df.iterrows():
+        snap_candidates[nid] = pathing.k_nearest_graph_nodes(
+            node["lat"], node["lon"], osm_nodes, osm_graph, k=1
+        )
+
+    # Draw ways if checkbox is enabled
+    pathing.draw_snap_connections(fig, nodes_df, snap_candidates, osm_nodes)
+    if is_show_ways:
+        pathing.draw_assignment_ways(fig, ways_df, nodes_df, osm_nodes, snap_candidates, osm_graph)
+
+    # Draw nodes onto the map
+    for idx, node in nodes_df.iterrows():
+        if idx == start:
+            node_color = "green"
+        elif idx in goals:
+            node_color = "red"
+        else:
+            node_color = "black"
+        
+        fig.add_trace(go.Scattermap(
+            lat=[node['lat']],
+            lon=[node['lon']],
+            mode='markers',
+            marker=dict(
+                size=12,
+                color=node_color
+            ),
+            text="[" + str(idx) + "] " + node['label'],
+            hoverinfo='text',
+            name="[" + str(idx) + "] " + node['label'],
+            showlegend=False
+        ))
+    
+    # Set up the layout for the map
+    fig.update_layout(
+        autosize=True,
+        hovermode='closest',
+        height=800,
+        map=dict(
+            style="open-street-map",
+            bearing=0,
+            center=dict(
+                lat=sum(nodes_df['lat']) / len(nodes_df),
+                lon=sum(nodes_df['lon']) / len(nodes_df)
+            ),
+            pitch=0,
+            zoom=15.5,    
+        ),
+        margin={"r": 0, "t": 0, "l": 0, "b": 0},
+        legend=dict(
+            itemwidth=30,
+            y=0.9)
+    )
+    
+    # Return empty dataframe for paths
+    empty_paths = pd.DataFrame(columns=['Path Name', 'Goal', 'Path', 'Total Time (mins)'])
+    return fig, ways_df, empty_paths
+
+def load_and_generate(filename, is_show_ways=False):
+    """Load a configuration file and generate the path automatically"""
+    filepath = os.path.join(TEST_CASES_FOLDER, filename)
+    nodes_df, ways_df, cameras_df, start, goals, accident_multiplier = file_reader.parse_config_file(filepath)
+    goals_str = ", ".join(map(str, goals))
+    
+    # Generate the map with paths
+    fig, ways_df, paths_df = pathFindingMap(nodes_df, ways_df, start, goals_str, accident_multiplier, is_show_ways)
+    
+    return nodes_df, ways_df, start, goals_str, accident_multiplier, fig, paths_df
+
 #gradio interface
 with gr.Blocks() as demo:
     with gr.Column():
@@ -201,13 +295,17 @@ with gr.Blocks() as demo:
         with gr.Row():
             paths_out = gr.DataFrame(interactive=False, label="Found Paths")
         with gr.Row():
+            file_dropdown = gr.Dropdown(choices=available_files, value=default_file, label="Select Test Case File", interactive=True)
+        with gr.Row():
             inp_start = gr.Number(value=start, label="Start Node ID", interactive=True)
             inp_goals = gr.Textbox(value=", ".join(goals), label="Goal Node IDs (comma separated)", interactive=True)
             inp_accident_multiplier = gr.Number(value=accident_multiplier, label="Accident Multiplier", interactive=True)
         with gr.Row():
             inp_ai_model = gr.Dropdown(choices=constants.ENUM_AI_MODELS, value=constants.ENUM_AI_MODELS[0], label="AI Model for Image Classification", interactive=True)
             is_show_ways = gr.Checkbox(value=True, label="Show Ways", interactive=True)
-        btn = gr.Button(value="Generate path")
+        with gr.Row():
+            btn = gr.Button(value="Generate path")
+            btn_clear = gr.Button(value="Clear Routes")
     with gr.Tab("Nodes"):
         nodes = gr.Dataframe(
             value=init_nodes_df, interactive=True, datatype=["number", "number", "text"]
@@ -228,7 +326,13 @@ with gr.Blocks() as demo:
             camera_severity_rows.append(severity)
             camera_predictions_rows.append(predictions)
             camera_image_rows.append(image)
+    file_dropdown.change(
+        load_and_generate,
+        inputs=[file_dropdown, is_show_ways],
+        outputs=[nodes, ways, inp_start, inp_goals, inp_accident_multiplier, map, paths_out]
+    )
     inp_ai_model.change(image_classification.load_model, inp_ai_model, None)
     demo.load(pathFindingMap,[nodes, ways, inp_start, inp_goals, inp_accident_multiplier, is_show_ways],[map,ways, paths_out]+camera_way_rows+camera_severity_rows+camera_predictions_rows+camera_image_rows)
     btn.click(pathFindingMap,[nodes, ways, inp_start, inp_goals, inp_accident_multiplier, is_show_ways],[map,ways, paths_out]+camera_way_rows+camera_severity_rows+camera_predictions_rows+camera_image_rows)
+    btn_clear.click(clearMap,[nodes, ways, inp_start, inp_goals, inp_accident_multiplier, is_show_ways],[map,ways, paths_out])
 demo.launch()
