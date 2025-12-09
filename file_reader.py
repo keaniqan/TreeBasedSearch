@@ -1,4 +1,6 @@
+import argparse
 import pandas as pd
+
 def split_csv_allow_commas(line, min_fields):
     parts = []
     buf = []
@@ -68,8 +70,8 @@ def parse_config_file(path):
                 p = split_csv_allow_commas(line, 6)
                 ways.append({
                     "id": int(p[0]),
-                    "from": int(p[1])-1,
-                    "to": int(p[2])-1,
+                    "from": int(p[1]),
+                    "to": int(p[2]),
                     "name": p[3],
                     "type": p[4],
                     "base_time": float(p[5]),
@@ -90,15 +92,30 @@ def parse_config_file(path):
                 p = [x.strip() for x in line.split(",")]
                 key = p[0].upper()
                 if key == "START":
-                    start = p[1]
+                    start = int(p[1])
                 elif key == "GOAL":
-                    goals = p[1:]
+                    goals = [int(item) for item in p[1:]]
                 elif key == "ACCIDENT_MULTIPLIER":
                     accident_multiplier = float(p[1])
 
     # Convert nodes and ways to pandas DataFrames
     nodes_df = pd.DataFrame.from_dict(nodes, orient="index")
-    nodes_df.index.name = "id"
     ways_df = pd.DataFrame(ways)
     cameras_df = pd.DataFrame(cameras)
     return nodes_df, ways_df, cameras_df, start, goals, accident_multiplier
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Parse configuration file for graph data.")
+    parser.add_argument("config_path", type=str, help="Path to the configuration file.")
+    args = parser.parse_args()
+
+    nodes_df, ways_df, cameras_df, start, goals, accident_multiplier = parse_config_file(args.config_path)
+    print("Nodes DataFrame:")
+    print(nodes_df)
+    print("\nWays DataFrame:")
+    print(ways_df)
+    print("\nCameras DataFrame:")
+    print(cameras_df)
+    print(f"\nStart Node: {start}")
+    print(f"Goal Nodes: {goals}")
+    print(f"Accident Multiplier: {accident_multiplier}")

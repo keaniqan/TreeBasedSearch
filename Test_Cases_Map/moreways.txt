@@ -146,6 +146,6 @@
 2026,cameras/cam_severe.jpg
 
 [META]
-START,0
+START,1
 GOAL,9,12
 ACCIDENT_MULTIPLIER,3

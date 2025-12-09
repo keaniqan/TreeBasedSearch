@@ -396,7 +396,7 @@ def draw_assignment_ways(fig, ways_df, nodes_df, osm_nodes, snap_candidates, roa
     prev_from = None
     prev_to = None
     
-    for way_idx, way in ways_df.iterrows():
+    for way_id, way in ways_df.iterrows():
         try:
             if way['from'] == prev_to and way['to'] == prev_from:
                 continue
@@ -404,7 +404,7 @@ def draw_assignment_ways(fig, ways_df, nodes_df, osm_nodes, snap_candidates, roa
             from_id = way['from']
             to_id = way['to']
             
-            print(f"\nWay {way_idx}: {from_id} → {to_id}")
+            print(f"\nWay {way_id}: {from_id} → {to_id}")
             
             osm_path, path_len, is_straight = find_best_path_between_nodes(
                 from_id, to_id, snap_candidates, road_graph
@@ -421,8 +421,8 @@ def draw_assignment_ways(fig, ways_df, nodes_df, osm_nodes, snap_candidates, roa
                 way_color = constants.SERVICE_ROAD_COLOR
             
             if is_straight or osm_path is None:
-                segment_lats = [nodes_df.loc[from_id]['lat'], nodes_df.loc[to_id]['lat']]
-                segment_lons = [nodes_df.loc[from_id]['lon'], nodes_df.loc[to_id]['lon']]
+                segment_lats = [nodes_df.at[from_id, 'lat'], nodes_df.at[to_id, 'lat']]
+                segment_lons = [nodes_df.at[from_id, 'lon'], nodes_df.at[to_id, 'lon']]
             else:
                 segment_lats = [osm_nodes[nid][0] for nid in osm_path]
                 segment_lons = [osm_nodes[nid][1] for nid in osm_path]
@@ -449,7 +449,7 @@ def draw_assignment_ways(fig, ways_df, nodes_df, osm_nodes, snap_candidates, roa
             prev_to = way['to']
             
         except Exception as e:
-            print(f"\n!!! ERROR drawing way {way_idx}: {e}")
+            print(f"\n!!! ERROR drawing way {way_id}: {e}")
             import traceback
             traceback.print_exc()
 

@@ -12,3 +12,6 @@ ROAD_LINE_WIDTH      = 4
 # AI Model Constants
 # List of available AI models. Add on more models here as needed.
 ENUM_AI_MODELS       =["EfficientNetV2B0", "ResNet50"]
+
+# Test cases
+TEST_CASE_FOLDER = "Test_Cases_Map"
