@@ -20,7 +20,6 @@ from strategies.beam import run_beam
 # ============================
 # Get list of available test case files
 available_files = [f for f in os.listdir(constants.TEST_CASE_FOLDER) if f.endswith('.txt')]
-default_file = "default.txt" if "default.txt" in available_files else available_files[0]
 
 # Dataframe definitions, these will be initially be populated with the data of the config file parse
 init_nodes_df = pd.DataFrame(columns = ['id','lat', 'lon', 'label'], index=['id'])
@@ -30,14 +29,17 @@ init_start = 0
 init_goals = []
 init_accident_multiplier = 0.0
 
-image_classification.load_model(constants.ENUM_AI_MODELS[0])
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="Launch gradio path finding application")
     parser.add_argument('--config', help='Initial configuration file', default='Test_Cases_Map\\default.txt')
     
     args = parser.parse_args()
     config = args.config
     init_nodes_df, init_ways_df, init_cameras_df, init_start, init_goals, init_accident_multiplier = file_reader.parse_config_file(config)
+
+    #Update default file to dislplay the currently loaded file
+    default_file = os.path.basename(config)
+image_classification.load_model(constants.ENUM_AI_MODELS[0])
 
 def pathFindingMap(nodes_df, ways_df, cameras_df,start, goals, accident_multiplier, is_show_ways=False, is_show_paths=True):
     #Indexing dataframes properly
@@ -163,7 +165,6 @@ def pathFindingMap(nodes_df, ways_df, cameras_df,start, goals, accident_multipli
     fig.update_layout(
         autosize=True,
         hovermode='closest',
-        height=800,
         map=dict(
             style="open-street-map",
             bearing=0,
@@ -181,32 +182,34 @@ def pathFindingMap(nodes_df, ways_df, cameras_df,start, goals, accident_multipli
     )
 
     #hiding and showing the appropriate cameras
-    camera_severity_updates = [gr.Number(visible=False) for _ in range(30)]
-    camera_predictions_updates = [gr.Textbox(visible=False) for _ in range(30)]
-    camera_way_updates = [gr.Number(visible=False) for _ in range(30)]
-    camera_image_updates = [gr.Image(visible=False) for _ in range(30)]
+    camera_rows = [gr.Row(visible=False) for _ in range(constants.MAX_CAMERA_COUNT)]
+    camera_severity_updates = [gr.Number(visible=False) for _ in range(constants.MAX_CAMERA_COUNT)]
+    camera_predictions_updates = [gr.Textbox(visible=False) for _ in range(constants.MAX_CAMERA_COUNT)]
+    camera_way_updates = [gr.Number(visible=False) for _ in range(constants.MAX_CAMERA_COUNT)]
+    camera_image_updates = [gr.Image(visible=False) for _ in range(constants.MAX_CAMERA_COUNT)]
     row_id=0
     for cam_id, camera in cameras_df.iterrows():
+        camera_rows[row_id] = gr.Row(visible=True)
         camera_way_updates[row_id] = gr.Number(visible=True, value=camera['way_id'])
         camera_severity_updates[row_id] = gr.Number(visible=True, value=camera['accident_severity'])
         camera_predictions_updates[row_id] = gr.Textbox(visible=True, value=", ".join([f"{x:.2f}" for x in camera['predictions']]))
         camera_image_updates[row_id] = gr.Image(visible=True, value=camera['image_path'])
         row_id+=1
-    return [fig,nodes_df,ways_df, cameras_df, paths_df]+camera_way_updates+camera_severity_updates+camera_predictions_updates+camera_image_updates
+    return [fig,nodes_df,ways_df, cameras_df, paths_df]+camera_rows+camera_way_updates+camera_severity_updates+camera_predictions_updates+camera_image_updates
 
 def load_and_generate(filename, is_show_ways=False, is_show_paths=True):
     """Load a configuration file and generate the path automatically"""
     filepath = os.path.join(constants.TEST_CASE_FOLDER, filename)
     nodes_df, ways_df, cameras_df, start, goals, accident_multiplier = file_reader.parse_config_file(filepath)
-    print(filepath)
     # Generate the map with paths
-    return  pathFindingMap(nodes_df, ways_df,cameras_df, start, goals, accident_multiplier, is_show_ways,is_show_paths)
+    return pathFindingMap(nodes_df, ways_df,cameras_df, start, goals, accident_multiplier, is_show_ways, is_show_paths)
 
 
 #================================================
 #   GADIO INTERFACE
 #================================================
 #globals for dynamic gradio components
+camera_rows = []
 camera_way_rows = []
 camera_severity_rows = []
 camera_predictions_rows = []
@@ -239,26 +242,27 @@ with gr.Blocks() as demo:
             value=init_ways_df, interactive=True, datatype=["number", "number", "number", "text", "text", "number", "text", "number"]
         )
     with gr.Tab("Cameras"):
-        inp_camera = gr.Dataframe(value=init_cameras_df, visible=False)
-        for i in range(30):
-            with gr.Row():
+        for i in range(constants.MAX_CAMERA_COUNT):
+            with gr.Row() as cam_row:
                 with gr.Row():
                     way = gr.Number(value=0, label="Way ID", interactive=False)
                     severity = gr.Number(value=0, label="Accident Severity", interactive=False)
                     predictions = gr.Textbox(value="[]", label="Predictions (none, minor, moderate, severe)",min_width=30, interactive=False)
                 image = gr.Image(type="filepath", label="Image Path", interactive=False)
+                camera_rows.append(cam_row)
             camera_way_rows.append(way)
             camera_severity_rows.append(severity)
             camera_predictions_rows.append(predictions)
             camera_image_rows.append(image)
+        inp_camera = gr.Dataframe(value=init_cameras_df, interactive=False,visible=True, max_height=1)
 
     # Event listeners
     file_dropdown.change(
         load_and_generate,
         inputs=[file_dropdown, is_show_ways, is_show_paths],
-        outputs=[map,nodes,ways,inp_camera, paths_out]+camera_way_rows+camera_severity_rows+camera_predictions_rows+camera_image_rows
+        outputs=[map,nodes,ways,inp_camera, paths_out]+camera_rows+camera_way_rows+camera_severity_rows+camera_predictions_rows+camera_image_rows
     )
     inp_ai_model.change(image_classification.load_model, inp_ai_model, None)
-    demo.load(pathFindingMap,[nodes, ways, inp_camera, inp_start, inp_goals, inp_accident_multiplier, is_show_ways, is_show_paths],[map,nodes,ways,inp_camera, paths_out]+camera_way_rows+camera_severity_rows+camera_predictions_rows+camera_image_rows)
-    btn.click(pathFindingMap,[nodes, ways, inp_camera, inp_start, inp_goals, inp_accident_multiplier, is_show_ways, is_show_paths],[map,nodes,ways,inp_camera, paths_out]+camera_way_rows+camera_severity_rows+camera_predictions_rows+camera_image_rows)
+    demo.load(pathFindingMap,[nodes, ways, inp_camera, inp_start, inp_goals, inp_accident_multiplier, is_show_ways, is_show_paths],[map,nodes,ways,inp_camera, paths_out]+camera_rows+camera_way_rows+camera_severity_rows+camera_predictions_rows+camera_image_rows)
+    btn.click(pathFindingMap,[nodes, ways, inp_camera, inp_start, inp_goals, inp_accident_multiplier, is_show_ways, is_show_paths],[map,nodes,ways,inp_camera, paths_out]+camera_rows+camera_way_rows+camera_severity_rows+camera_predictions_rows+camera_image_rows)
 demo.launch()

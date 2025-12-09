@@ -15,3 +15,5 @@ ENUM_AI_MODELS       =["EfficientNetV2B0", "ResNet50"]
 
 # Test cases
 TEST_CASE_FOLDER = "Test_Cases_Map"
+
+MAX_CAMERA_COUNT = 30
