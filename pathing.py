@@ -479,13 +479,14 @@ def separate_paths(paths):
     
     return main_path, alternate_paths
 
-def draw_paths(fig, paths_list, nodes_df, osm_nodes, snap_candidates, road_graph):
+def draw_paths(fig, paths_list, nodes_df,ways_df, osm_nodes, snap_candidates, road_graph):
     """Draw main and alternate paths on the map
     
     Args:
         fig: Plotly figure object
         paths_list: List of path dicts [{"path_name": ..., "goal": ..., "nodes": [...], "time": ...}]
         nodes_df: DataFrame of assignment nodes
+        ways_df: DataFrame of assignment ways
         osm_nodes: Dictionary of OSM nodes
         snap_candidates: Dictionary mapping node IDs to snap candidates
         road_graph: Road graph for pathfinding
@@ -500,53 +501,68 @@ def draw_paths(fig, paths_list, nodes_df, osm_nodes, snap_candidates, road_graph
         if(path['time'] == float('inf')):
             return  # Skip paths with no valid route
 
-        route_ids = path['nodes']
-        print(f"\nPath {path_index}: {route_ids} (time: {path['time']})")
-        
+        node_ids = path['nodes']
+        print(f"\nPath {path_index}: {node_ids} (time: {path['time']})")
+
         #Generate lat/lon lists for the full path
-        all_lats = []
-        all_lons = []
-        for i in range(len(route_ids) - 1):
-            from_id = route_ids[i]
-            to_id = route_ids[i + 1]
+        for i in range(len(node_ids) - 1):
+            from_id = node_ids[i]
+            to_id = node_ids[i + 1]
+
+            #Retrieve the way from ways_df using from and to
+            ways = ways_df[(ways_df['from'] == from_id) & (ways_df['to'] == to_id)].iloc[0]
             
-            osm_path, path_len, is_straight = find_best_path_between_nodes(
-                from_id, to_id, snap_candidates, road_graph
-            )
-            
+            # Fiding the best osm path between the two nodes and generate lat/lon segments
+            lats = []
+            lons = []
+            osm_path, path_len, is_straight = find_best_path_between_nodes(from_id, to_id, snap_candidates, road_graph)
             if is_straight or osm_path is None:
                 segment_lats = [nodes_df.loc[from_id, 'lat'], nodes_df.loc[to_id, 'lat']]
                 segment_lons = [nodes_df.loc[from_id, 'lon'], nodes_df.loc[to_id, 'lon']]
             else:
                 segment_lats = [osm_nodes[nid][0] for nid in osm_path]
                 segment_lons = [osm_nodes[nid][1] for nid in osm_path]
-            
-            if all_lats:
-                all_lats.extend(segment_lats[1:])
-                all_lons.extend(segment_lons[1:])
+            if lats:
+                lats.extend(segment_lats[1:])
+                lons.extend(segment_lons[1:])
             else:
-                all_lats.extend(segment_lats)
-                all_lons.extend(segment_lons)
+                lats.extend(segment_lats)
+                lons.extend(segment_lons)
         
-        #Genrate color based on path index
-        if path_index == 0:
-            line_color = constants.PRIMARY_PATH_COLOR  # Blue for main path
-        else:
-            line_color = constants.SECONDARY_PATH_COLOR  # Light blue for alternate paths
-
-        fig.add_trace(go.Scattermap(
-            lat=all_lats,
-            lon=all_lons,
-            mode='lines',
-            line=dict(
-                width=constants.PATH_LINE_WIDTH if path_index == 0 else constants.PATH_LINE_WIDTH-1,
-                color=line_color
-            ),
-            name=f'{path["path_name"]}(Time: {path["time"]:.1f})',
-            hoverinfo='text',
-            text=f'{path["path_name"]}<br>Time: {path["time"]:.1f}',
-            showlegend=True
-        ))
+            #Generate the line color. If there was severe accident on the way, color it red, if it was moderate, color it orange, else use default road color.
+            #An alternate palate is used for alternate paths to differentiate them from the main path.
+            if path_index == 0:
+                if ways['accident_severity'] == 3:
+                    line_color = constants.PRIMARY_PATH_SEVERE_COLOR
+                elif ways['accident_severity'] == 2:
+                    line_color = constants.PRIMARY_PATH_MODERATE_COLOR
+                elif ways['accident_severity'] == 1:
+                    line_color = constants.PRIMARY_PATH_MINOR_COLOR
+                else:
+                    line_color = constants.PRIMARY_PATH_COLOR
+            else:
+                if ways['accident_severity'] == 3:
+                    line_color = constants.SECONDARY_PATH_COLOR_SEVERE_COLOR
+                elif ways['accident_severity'] == 2:
+                    line_color = constants.SECONDARY_PATH_COLOR_MODERATE_COLOR
+                elif ways['accident_severity'] == 1:
+                    line_color = constants.SECONDARY_PATH_COLOR_MINOR_COLOR
+                else:
+                    line_color = constants.SECONDARY_PATH_COLOR
+            fig.add_trace(go.Scattermap(
+                lat=lats,
+                lon=lons,
+                mode='lines',
+                line=dict(
+                    width=constants.PATH_LINE_WIDTH if path_index == 0 else constants.PATH_LINE_WIDTH-1,
+                    color=line_color
+                ),
+                name=f'{path["path_name"]}(Time: {path["time"]:.1f})',
+                legendgroup=f'{path["path_name"]}(Time: {path["time"]:.1f})',
+                hoverinfo='text',
+                text=f'{path["path_name"]}<br>Time: {path["time"]:.1f}',
+                showlegend=(i == 0)
+            ))
     
     # Draw alternate paths first (so main path appears on top)
     for idx, alt_path in enumerate(paths_list[1:]):

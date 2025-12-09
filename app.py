@@ -136,7 +136,7 @@ def pathFindingMap(nodes_df, ways_df, cameras_df,start, goals, accident_multipli
 
     #Drawing the actual paths found
     if is_show_paths:
-        pathing.draw_paths(fig, temp_paths, nodes_df, osm_nodes, snap_candidates, osm_graph)
+        pathing.draw_paths(fig, temp_paths, nodes_df, ways_df, osm_nodes, snap_candidates, osm_graph)
 
     # Draw nodes onto the map
     for idx, node in nodes_df.iterrows():
