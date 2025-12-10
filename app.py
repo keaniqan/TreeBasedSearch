@@ -165,6 +165,7 @@ def pathFindingMap(nodes_df, ways_df, cameras_df,start, goals, accident_multipli
     fig.update_layout(
         autosize=True,
         hovermode='closest',
+        height=800,
         map=dict(
             style="open-street-map",
             bearing=0,
@@ -204,6 +205,33 @@ def load_and_generate(filename, is_show_ways=False, is_show_paths=True):
     # Generate the map with paths
     return pathFindingMap(nodes_df, ways_df,cameras_df, start, goals, accident_multiplier, is_show_ways, is_show_paths)
 
+def add_new_camera(cameras_df, image_path, way_id, model_name):
+    """Add a new camera to the cameras dataframe"""
+    if image_path is None:
+        return cameras_df
+    
+    # Load the selected model
+    image_classification.load_model(model_name)
+    
+    # Create new camera entry
+    new_camera = pd.DataFrame([{
+        'way_id': int(way_id),
+        'image_path': image_path,
+        'accident_severity': 0,
+        'predictions': []
+    }])
+    
+    # Append to cameras dataframe
+    cameras_df = pd.concat([cameras_df, new_camera], ignore_index=True)
+    
+    return cameras_df
+
+def delete_camera(cameras_df, camera_index):
+    """Delete a camera from the cameras dataframe"""
+    if camera_index < len(cameras_df):
+        cameras_df = cameras_df.drop(cameras_df.index[camera_index]).reset_index(drop=True)
+    return cameras_df
+
 
 #================================================
 #   GADIO INTERFACE
@@ -214,6 +242,7 @@ camera_way_rows = []
 camera_severity_rows = []
 camera_predictions_rows = []
 camera_image_rows = []
+camera_delete_btns = []
 #App interface
 with gr.Blocks() as demo:
     with gr.Column():
@@ -242,6 +271,14 @@ with gr.Blocks() as demo:
             value=init_ways_df, interactive=True, datatype=["number", "number", "number", "text", "text", "number", "text", "number"]
         )
     with gr.Tab("Cameras"):
+        with gr.Accordion("Add New Camera", open=True):
+            with gr.Row():
+                new_camera_image = gr.Image(type="filepath", label="Upload Car Image", interactive=True)
+                with gr.Column():
+                    new_camera_way = gr.Number(value=0, label="Select Way ID", interactive=True)
+                    new_camera_model = gr.Dropdown(choices=constants.ENUM_AI_MODELS, value=constants.ENUM_AI_MODELS[0], label="Select AI Model", interactive=True)
+                    add_camera_btn = gr.Button("Add Camera")
+        
         for i in range(constants.MAX_CAMERA_COUNT):
             with gr.Row() as cam_row:
                 with gr.Row():
@@ -249,11 +286,13 @@ with gr.Blocks() as demo:
                     severity = gr.Number(value=0, label="Accident Severity", interactive=False)
                     predictions = gr.Textbox(value="[]", label="Predictions (none, minor, moderate, severe)",min_width=30, interactive=False)
                 image = gr.Image(type="filepath", label="Image Path", interactive=False)
+                delete_btn = gr.Button("Delete", size="sm", variant="stop")
                 camera_rows.append(cam_row)
             camera_way_rows.append(way)
             camera_severity_rows.append(severity)
             camera_predictions_rows.append(predictions)
             camera_image_rows.append(image)
+            camera_delete_btns.append(delete_btn)
         inp_camera = gr.Dataframe(value=init_cameras_df, interactive=False,visible=True, max_height=1)
 
     # Event listeners
@@ -263,6 +302,28 @@ with gr.Blocks() as demo:
         outputs=[map,nodes,ways,inp_camera, paths_out]+camera_rows+camera_way_rows+camera_severity_rows+camera_predictions_rows+camera_image_rows
     )
     inp_ai_model.change(image_classification.load_model, inp_ai_model, None)
+    add_camera_btn.click(
+        add_new_camera,
+        inputs=[inp_camera, new_camera_image, new_camera_way, new_camera_model],
+        outputs=[inp_camera]
+    ).then(
+        pathFindingMap,
+        inputs=[nodes, ways, inp_camera, inp_start, inp_goals, inp_accident_multiplier, is_show_ways, is_show_paths],
+        outputs=[map,nodes,ways,inp_camera, paths_out]+camera_rows+camera_way_rows+camera_severity_rows+camera_predictions_rows+camera_image_rows
+    )
+    
+    # Delete button event handlers
+    for i, delete_btn in enumerate(camera_delete_btns):
+        delete_btn.click(
+            lambda cameras_df, idx=i: delete_camera(cameras_df, idx),
+            inputs=[inp_camera],
+            outputs=[inp_camera]
+        ).then(
+            pathFindingMap,
+            inputs=[nodes, ways, inp_camera, inp_start, inp_goals, inp_accident_multiplier, is_show_ways, is_show_paths],
+            outputs=[map,nodes,ways,inp_camera, paths_out]+camera_rows+camera_way_rows+camera_severity_rows+camera_predictions_rows+camera_image_rows
+        )
+    
     demo.load(pathFindingMap,[nodes, ways, inp_camera, inp_start, inp_goals, inp_accident_multiplier, is_show_ways, is_show_paths],[map,nodes,ways,inp_camera, paths_out]+camera_rows+camera_way_rows+camera_severity_rows+camera_predictions_rows+camera_image_rows)
     btn.click(pathFindingMap,[nodes, ways, inp_camera, inp_start, inp_goals, inp_accident_multiplier, is_show_ways, is_show_paths],[map,nodes,ways,inp_camera, paths_out]+camera_rows+camera_way_rows+camera_severity_rows+camera_predictions_rows+camera_image_rows)
 demo.launch()
