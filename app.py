@@ -196,14 +196,19 @@ def pathFindingMap(nodes_df, ways_df, cameras_df,start, goals, accident_multipli
         camera_predictions_updates[row_id] = gr.Textbox(visible=True, value=", ".join([f"{x:.2f}" for x in camera['predictions']]))
         camera_image_updates[row_id] = gr.Image(visible=True, value=camera['image_path'])
         row_id+=1
-    return [fig,nodes_df,ways_df, cameras_df, paths_df]+camera_rows+camera_way_updates+camera_severity_updates+camera_predictions_updates+camera_image_updates
+
+    #format the goal array to string for display
+    goals_str = ", ".join(str(g) for g in goals)
+
+    # Return updated start, goals, and accident_multiplier as well
+    return [fig, nodes_df, ways_df, cameras_df, paths_df, start, goals_str, accident_multiplier] + camera_rows + camera_way_updates + camera_severity_updates + camera_predictions_updates + camera_image_updates
 
 def load_and_generate(filename, is_show_ways=False, is_show_paths=True):
     """Load a configuration file and generate the path automatically"""
     filepath = os.path.join(constants.TEST_CASE_FOLDER, filename)
     nodes_df, ways_df, cameras_df, start, goals, accident_multiplier = file_reader.parse_config_file(filepath)
     # Generate the map with paths
-    return pathFindingMap(nodes_df, ways_df,cameras_df, start, goals, accident_multiplier, is_show_ways, is_show_paths)
+    return pathFindingMap(nodes_df, ways_df, cameras_df, start, goals, accident_multiplier, is_show_ways, is_show_paths)
 
 def add_new_camera(cameras_df, image_path, way_id, model_name):
     """Add a new camera to the cameras dataframe"""
@@ -299,7 +304,7 @@ with gr.Blocks() as demo:
     file_dropdown.change(
         load_and_generate,
         inputs=[file_dropdown, is_show_ways, is_show_paths],
-        outputs=[map,nodes,ways,inp_camera, paths_out]+camera_rows+camera_way_rows+camera_severity_rows+camera_predictions_rows+camera_image_rows
+        outputs=[map, nodes, ways, inp_camera, paths_out, inp_start, inp_goals, inp_accident_multiplier] + camera_rows + camera_way_rows + camera_severity_rows + camera_predictions_rows + camera_image_rows
     )
     inp_ai_model.change(image_classification.load_model, inp_ai_model, None)
     add_camera_btn.click(
@@ -309,7 +314,7 @@ with gr.Blocks() as demo:
     ).then(
         pathFindingMap,
         inputs=[nodes, ways, inp_camera, inp_start, inp_goals, inp_accident_multiplier, is_show_ways, is_show_paths],
-        outputs=[map,nodes,ways,inp_camera, paths_out]+camera_rows+camera_way_rows+camera_severity_rows+camera_predictions_rows+camera_image_rows
+        outputs=[map, nodes, ways, inp_camera, paths_out, inp_start, inp_goals, inp_accident_multiplier] + camera_rows + camera_way_rows + camera_severity_rows + camera_predictions_rows + camera_image_rows
     )
     
     # Delete button event handlers
@@ -321,9 +326,17 @@ with gr.Blocks() as demo:
         ).then(
             pathFindingMap,
             inputs=[nodes, ways, inp_camera, inp_start, inp_goals, inp_accident_multiplier, is_show_ways, is_show_paths],
-            outputs=[map,nodes,ways,inp_camera, paths_out]+camera_rows+camera_way_rows+camera_severity_rows+camera_predictions_rows+camera_image_rows
+            outputs=[map, nodes, ways, inp_camera, paths_out, inp_start, inp_goals, inp_accident_multiplier] + camera_rows + camera_way_rows + camera_severity_rows + camera_predictions_rows + camera_image_rows
         )
     
-    demo.load(pathFindingMap,[nodes, ways, inp_camera, inp_start, inp_goals, inp_accident_multiplier, is_show_ways, is_show_paths],[map,nodes,ways,inp_camera, paths_out]+camera_rows+camera_way_rows+camera_severity_rows+camera_predictions_rows+camera_image_rows)
-    btn.click(pathFindingMap,[nodes, ways, inp_camera, inp_start, inp_goals, inp_accident_multiplier, is_show_ways, is_show_paths],[map,nodes,ways,inp_camera, paths_out]+camera_rows+camera_way_rows+camera_severity_rows+camera_predictions_rows+camera_image_rows)
+    demo.load(
+        pathFindingMap,
+        [nodes, ways, inp_camera, inp_start, inp_goals, inp_accident_multiplier, is_show_ways, is_show_paths],
+        [map, nodes, ways, inp_camera, paths_out, inp_start, inp_goals, inp_accident_multiplier] + camera_rows + camera_way_rows + camera_severity_rows + camera_predictions_rows + camera_image_rows
+    )
+    btn.click(
+        pathFindingMap,
+        [nodes, ways, inp_camera, inp_start, inp_goals, inp_accident_multiplier, is_show_ways, is_show_paths],
+        [map, nodes, ways, inp_camera, paths_out, inp_start, inp_goals, inp_accident_multiplier] + camera_rows + camera_way_rows + camera_severity_rows + camera_predictions_rows + camera_image_rows
+    )
 demo.launch()
