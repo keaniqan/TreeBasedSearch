@@ -139,7 +139,7 @@ def pathFindingMap(nodes_df, ways_df, cameras_df,start, goals, accident_multipli
         pathing.draw_paths(fig, temp_paths, nodes_df, ways_df, osm_nodes, snap_candidates, osm_graph)
 
     # Draw nodes onto the map
-    for idx, node in nodes_df.iterrows():
+    for idx, node in nodes_df.iterrows(): 
         if idx == start:
             node_color = "green"
         elif idx in goals:
@@ -147,7 +147,7 @@ def pathFindingMap(nodes_df, ways_df, cameras_df,start, goals, accident_multipli
         else:
             node_color = "black"
         
-        fig.add_trace(go.Scattermap(
+        fig.add_trace(go.Scattermap(    
             lat=[node['lat']],
             lon=[node['lon']],
             mode='markers',
