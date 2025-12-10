@@ -558,9 +558,9 @@ def draw_paths(fig, paths_list, nodes_df,ways_df, osm_nodes, snap_candidates, ro
                     color=line_color
                 ),
                 name=f'{path["path_name"]}(Time: {path["time"]:.1f})',
-                legendgroup=f'{path["path_name"]}(Time: {path["time"]:.1f})',
+                legendgroup=f'{path_index}_{path["path_name"]}',
                 hoverinfo='text',
-                text=f'{path["path_name"]}<br>Time: {path["time"]:.1f}',
+                text=f'🚘{path["path_name"]}<br>{path["time"]:.1f} min',
                 showlegend=(i == 0)
             ))
     
