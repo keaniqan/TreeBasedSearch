@@ -55,10 +55,9 @@ def clasify_accident(image_path:str)-> int:
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Classify accident severity from an image using a pre-trained model.")
-    parser.add_argument("model_type", type=str, help="Type of the model to load (e.g., EfficientNetV2B0)")
+    parser.add_argument("model_type", type=str,choices=["ResNet50", "MobileNetV2", "Exception"], help="Type of the model to use for classification")
     parser.add_argument("image_path", type=str, help="Path to the image file")
     args = parser.parse_args()
-
 
     model_type = args.model_type
     image_path = args.image_path
