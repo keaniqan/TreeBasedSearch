@@ -14,9 +14,6 @@
 13,1.557950,110.347900,Kuching Waterfront Jetty
 14,1.556000,110.340200,Wisma Hopoh
 15,1.553000,110.340800,Heroes Monument
-16,1.5565621788903345, 110.34905009393259,Ceylonese Restaurant
-17,1.5535673759878217, 110.34439110595117,Heroes' Monument
-18,1.558308518166141, 110.34507602780967,Pejabat Pos Besar Kuching
 
 [WAYS]
 # way_id,from_node,to_node,road_name,highway_type,travel_time_min
@@ -85,38 +82,6 @@
 2027,5,4,Jalan McDougall Inner,service,3
 # no reverse edge
 
-# Cathedral ↔ Ceylonese Restaurant (waterfront connection)
-2028,4,16,Jalan Tun Abang Haji Openg Extension,secondary,5
-2029,16,4,Jalan Tun Abang Haji Openg Extension,secondary,4
-
-# Ceylonese Restaurant ↔ Jetty (short waterfront path)
-2030,16,13,Main Bazaar Road East,primary,3
-2031,13,16,Main Bazaar Road East,primary,3
-
-# Ceylonese Restaurant ↔ Pos Besar (nearby connection)
-2032,16,18,Jalan Tun Abang Haji Openg,secondary,2
-2033,18,16,Jalan Tun Abang Haji Openg,secondary,2
-
-# Pos Besar ↔ Plaza Merdeka (close proximity)
-2034,18,3,Jalan Tun Abang Haji Openg,secondary,3
-2035,3,18,Jalan Tun Abang Haji Openg,secondary,2
-
-# Pos Besar ↔ Courthouse (parallel route)
-2036,18,6,Jalan Padungan Link,secondary,2
-2037,6,18,Jalan Padungan Link,secondary,2
-
-# Heroes Monument (17) ↔ Art Museum (similar area to node 15)
-2038,17,12,Jalan Taman Budaya South,secondary,4
-2039,12,17,Jalan Taman Budaya South,secondary,3
-
-# Heroes Monument (17) ↔ Haji Openg Junction
-2040,17,8,Jalan Tun Abang Haji Openg South,secondary,5
-2041,8,17,Jalan Tun Abang Haji Openg South,secondary,4
-
-# Heroes Monument (17) ↔ Heroes Monument (15) (connecting duplicate locations)
-2042,17,15,Jalan Heroes Link,service,2
-2043,15,17,Jalan Heroes Link,service,2
-
 [CAMERAS]
 # monitored roads (accident ⇒ time × ACCIDENT_MULTIPLIER)
 2001,cameras/cam_minor.JPEG
@@ -126,5 +91,5 @@
 
 [META]
 START,1
-GOAL,9,12
+GOAL,10,16
 ACCIDENT_MULTIPLIER,3

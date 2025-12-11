@@ -87,9 +87,9 @@
 2001,cameras/cam_minor.JPEG
 2011,cameras/cam_moderate.png
 2016,cameras/cam_none.jpg
-2026,cameras/cam_severe.jpg
+2026,cameras/image-20251202-192254.png
 
 [META]
 START,1
-GOAL,9,12
+GOAL,10,13
 ACCIDENT_MULTIPLIER,3

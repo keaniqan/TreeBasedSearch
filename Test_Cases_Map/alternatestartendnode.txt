@@ -84,8 +84,12 @@
 
 [CAMERAS]
 # monitored roads (accident ⇒ time × ACCIDENT_MULTIPLIER)
+2001,cameras/cam_minor.JPEG
+2011,cameras/cam_moderate.png
+2016,cameras/cam_none.jpg
+2026,cameras/cam_severe.jpg
 
 [META]
-START,1
-GOAL,9,13
+START,4
+GOAL,7,1
 ACCIDENT_MULTIPLIER,3
