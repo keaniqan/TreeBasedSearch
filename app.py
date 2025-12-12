@@ -281,6 +281,36 @@ def pathFindingMap(nodes_df, ways_df, cameras_df, start, goals, accident_multipl
             y=0.9)
     )
 
+    # Add a small legend at the bottom right for road colors
+    legend_items = [
+        ("Service Road", constants.SERVICE_ROAD_COLOR),
+        ("Tertiary Road", constants.TERTIARY_ROAD_COLOR),
+        ("Secondary Road", constants.SECONDARY_ROAD_COLOR),
+        ("Primary Road", constants.PRIMARY_ROAD_COLOR),
+    ]
+    legend_y_start = 0.08
+    legend_y_step = 0.035
+    legend_x = 0.98
+    for i, (label, color) in enumerate(legend_items):
+        fig.add_shape(
+            type="rect",
+            xref="paper", yref="paper",
+            x0=legend_x+0.06, y0=legend_y_start + i*legend_y_step,
+            x1=legend_x+0.03, y1=legend_y_start + i*legend_y_step + 0.025,
+            fillcolor=color, line_color=color, layer="above"
+        )
+        fig.add_annotation(
+            x=legend_x+0.08, y=legend_y_start + i*legend_y_step + 0.012,
+            xref="paper", yref="paper",
+            text=label,
+            showarrow=False,
+            font=dict(size=12, color="black"),
+            xanchor="left", yanchor="middle",
+            bgcolor="white",
+            bordercolor="black",
+            borderpad=1
+        )
+
     #hiding and showing the appropriate cameras
     camera_rows = [gr.Row(visible=False) for _ in range(constants.MAX_CAMERA_COUNT)]
     camera_severity_updates = [gr.Number(visible=False) for _ in range(constants.MAX_CAMERA_COUNT)]
