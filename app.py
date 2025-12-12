@@ -41,7 +41,7 @@ if __name__ == "__main__":
     default_file = os.path.basename(config)
 image_classification.load_model(constants.ENUM_AI_MODELS[0])
 
-def pathFindingMap(nodes_df, ways_df, cameras_df,start, goals, accident_multiplier, is_show_ways=False, is_show_paths=True):
+def pathFindingMap(nodes_df, ways_df, cameras_df, start, goals, accident_multiplier, selected_algorithm="All Algorithms", is_show_ways=False, is_show_paths=True):
     #Indexing dataframes properly
     nodes_df = nodes_df.astype({'id': 'int'})
     ways_df = ways_df.astype({'id': 'int', 'from': 'int', 'to': 'int', 'base_time': 'float', 'final_time': 'float', 'accident_severity': 'float'})
@@ -100,18 +100,117 @@ def pathFindingMap(nodes_df, ways_df, cameras_df,start, goals, accident_multipli
                 for i in range(len(path)-1)
             )
         })
-    #Using A* to find path
-    add_path("A*", run_astar(nodes_df, ways_df, start, goals))
-    #Using Beam Search to find path
-    add_path("Beam Search", run_beam(nodes_df, ways_df, start, goals, beam_width=3))
-    #Using BFS to find path
-    add_path("BFS", run_bfs(nodes_df, ways_df, start, goals))
-    #Using DFS to find path
-    add_path("DFS", run_dfs(nodes_df, ways_df, start, goals))
-    #using dijakstra to find path
-    add_path("Dijkstra", run_dijkstra(nodes_df, ways_df, start, goals))
-     #Using GBFS to find path
-    add_path("GBFS", run_gbfs(nodes_df, ways_df, start, goals))
+    # Helper function to run a specific algorithm
+    def run_algorithm(algo_name, nodes, ways, start_node, goal_nodes, beam_width=3):
+        if algo_name == "A*":
+            return run_astar(nodes, ways, start_node, goal_nodes)
+        elif algo_name == "Beam Search":
+            return run_beam(nodes, ways, start_node, goal_nodes, beam_width=beam_width)
+        elif algo_name == "BFS":
+            return run_bfs(nodes, ways, start_node, goal_nodes)
+        elif algo_name == "DFS":
+            return run_dfs(nodes, ways, start_node, goal_nodes)
+        elif algo_name == "Dijkstra":
+            return run_dijkstra(nodes, ways, start_node, goal_nodes)
+        elif algo_name == "GBFS":
+            return run_gbfs(nodes, ways, start_node, goal_nodes)
+        return None
+
+    # Function to generate alternate paths by routing through intermediate nodes not in main path
+    def generate_alternate_paths(algo_name, nodes, ways, start_node, goal_nodes, num_alternates=2):
+        """
+        Generate multiple alternate paths by forcing the path to visit an intermediate node
+        that is not part of the main path. This works for all algorithms (weighted or not).
+        """
+        import random
+        
+        all_paths = []
+        used_intermediate_nodes = set()
+        
+        # Get the main path first
+        main_result = run_algorithm(algo_name, nodes, ways, start_node, goal_nodes)
+        if main_result is None:
+            return [(f"{algo_name} (Main)", None)]
+        
+        all_paths.append((f"{algo_name} (Main)", main_result))
+        goal_reached, nodes_created_main, main_path = main_result
+        main_path_set = set(main_path)
+        
+        # Get all available nodes that are NOT in the main path (excluding start and goals)
+        all_node_ids = set(nodes.index.tolist())
+        candidate_nodes = list(all_node_ids - main_path_set - {start_node} - set(goal_nodes))
+        
+        # Shuffle to get random order
+        random.shuffle(candidate_nodes)
+        
+        # Generate alternate paths
+        alt_count = 0
+        for intermediate_node in candidate_nodes:
+            if alt_count >= num_alternates:
+                break
+            
+            # Skip if we've already used this intermediate node
+            if intermediate_node in used_intermediate_nodes:
+                continue
+            
+            # Try to find path: start -> intermediate_node -> goal
+            # First leg: start to intermediate node
+            first_leg = run_algorithm(algo_name, nodes, ways, start_node, [intermediate_node])
+            if first_leg is None:
+                continue
+            
+            _, _, first_path = first_leg
+            
+            # Second leg: intermediate node to any goal
+            second_leg = run_algorithm(algo_name, nodes, ways, intermediate_node, goal_nodes)
+            if second_leg is None:
+                continue
+            
+            goal_reached_alt, _, second_path = second_leg
+            
+            # Combine the two paths (remove duplicate intermediate node)
+            combined_path = first_path + second_path[1:]
+            
+            # Check if this combined path is different from all previous paths
+            path_is_different = True
+            for _, prev_result in all_paths:
+                if prev_result is not None:
+                    _, _, prev_path = prev_result
+                    if combined_path == prev_path:
+                        path_is_different = False
+                        break
+            
+            if path_is_different:
+                alt_count += 1
+                used_intermediate_nodes.add(intermediate_node)
+                
+                # Calculate total nodes created (sum of both legs)
+                total_nodes_created = first_leg[1] + second_leg[1]
+                
+                # Create result tuple in same format as other algorithms
+                alt_result = (goal_reached_alt, total_nodes_created, combined_path)
+                all_paths.append((f"{algo_name} (Alt {alt_count} via {intermediate_node})", alt_result))
+        
+        # If we couldn't find enough alternates, add None entries
+        while alt_count < num_alternates:
+            alt_count += 1
+            all_paths.append((f"{algo_name} (Alternate {alt_count})", None))
+        
+        return all_paths
+
+    if selected_algorithm == "All Algorithms":
+        # Run all algorithms
+        add_path("A*", run_astar(nodes_df, ways_df, start, goals))
+        add_path("Beam Search", run_beam(nodes_df, ways_df, start, goals, beam_width=3))
+        add_path("BFS", run_bfs(nodes_df, ways_df, start, goals))
+        add_path("DFS", run_dfs(nodes_df, ways_df, start, goals))
+        add_path("Dijkstra", run_dijkstra(nodes_df, ways_df, start, goals))
+        add_path("GBFS", run_gbfs(nodes_df, ways_df, start, goals))
+    else:
+        # Generate main path and alternate paths using the selected algorithm
+        path_results = generate_alternate_paths(selected_algorithm, nodes_df, ways_df, start, goals, num_alternates=2)
+        for path_name, result in path_results:
+            add_path(path_name, result)
 
     # Populate paths dataframe for display
     paths_df = pd.DataFrame(temp_paths, columns=['path_name','goal', 'nodes', 'time'])
@@ -139,7 +238,7 @@ def pathFindingMap(nodes_df, ways_df, cameras_df,start, goals, accident_multipli
         pathing.draw_paths(fig, temp_paths, nodes_df, ways_df, osm_nodes, snap_candidates, osm_graph)
 
     # Draw nodes onto the map
-    for idx, node in nodes_df.iterrows():
+    for idx, node in nodes_df.iterrows(): 
         if idx == start:
             node_color = "green"
         elif idx in goals:
@@ -147,7 +246,7 @@ def pathFindingMap(nodes_df, ways_df, cameras_df,start, goals, accident_multipli
         else:
             node_color = "black"
         
-        fig.add_trace(go.Scattermap(
+        fig.add_trace(go.Scattermap(    
             lat=[node['lat']],
             lon=[node['lon']],
             mode='markers',
@@ -203,12 +302,15 @@ def pathFindingMap(nodes_df, ways_df, cameras_df,start, goals, accident_multipli
     # Return updated start, goals, and accident_multiplier as well
     return [fig, nodes_df, ways_df, cameras_df, paths_df, start, goals_str, accident_multiplier] + camera_rows + camera_way_updates + camera_severity_updates + camera_predictions_updates + camera_image_updates
 
-def load_and_generate(filename, is_show_ways=False, is_show_paths=True):
+def load_and_generate(filename, selected_algorithm="All Algorithms", is_show_ways=False, is_show_paths=True):
     """Load a configuration file and generate the path automatically"""
     filepath = os.path.join(constants.TEST_CASE_FOLDER, filename)
     nodes_df, ways_df, cameras_df, start, goals, accident_multiplier = file_reader.parse_config_file(filepath)
     # Generate the map with paths
-    return pathFindingMap(nodes_df, ways_df, cameras_df, start, goals, accident_multiplier, is_show_ways, is_show_paths)
+    result = pathFindingMap(nodes_df, ways_df, cameras_df, start, goals, accident_multiplier, selected_algorithm, is_show_ways, is_show_paths)
+    # Return the result plus the start and goals values to update the textboxes
+    goals_str = ", ".join(str(g) for g in goals)
+    return result + [start, goals_str, accident_multiplier]
 
 def add_new_camera(cameras_df, image_path, way_id, model_name):
     """Add a new camera to the cameras dataframe"""
@@ -262,6 +364,7 @@ with gr.Blocks() as demo:
             btn = gr.Button(value="Generate path")
         with gr.Row():
             file_dropdown = gr.Dropdown(choices=available_files, value=default_file, label="Select Test Case File", interactive=True)
+            inp_algorithm = gr.Dropdown(choices=constants.ENUM_PATHFIND_ALGORITHMS, value=constants.ENUM_PATHFIND_ALGORITHMS[0], label="Pathfinding Algorithm", interactive=True)
             inp_ai_model = gr.Dropdown(choices=constants.ENUM_AI_MODELS, value=constants.ENUM_AI_MODELS[0], label="AI Model for Image Classification", interactive=True)
         with gr.Row():
             inp_start = gr.Number(value=init_start, label="Start Node ID", interactive=True)
@@ -275,14 +378,14 @@ with gr.Blocks() as demo:
         ways = gr.Dataframe(
             value=init_ways_df, interactive=True, datatype=["number", "number", "number", "text", "text", "number", "text", "number"]
         )
-    with gr.Tab("Cameras"):
+    with gr.Tab("Cameras"): 
         with gr.Accordion("Add New Camera", open=True):
             with gr.Row():
                 new_camera_image = gr.Image(type="filepath", label="Upload Car Image", interactive=True)
                 with gr.Column():
                     new_camera_way = gr.Number(value=0, label="Select Way ID", interactive=True)
                     new_camera_model = gr.Dropdown(choices=constants.ENUM_AI_MODELS, value=constants.ENUM_AI_MODELS[0], label="Select AI Model", interactive=True)
-                    add_camera_btn = gr.Button("Add Camera")
+                    add_camera_btn = gr.Button("Add Camera") 
         
         for i in range(constants.MAX_CAMERA_COUNT):
             with gr.Row() as cam_row:
@@ -303,8 +406,8 @@ with gr.Blocks() as demo:
     # Event listeners
     file_dropdown.change(
         load_and_generate,
-        inputs=[file_dropdown, is_show_ways, is_show_paths],
-        outputs=[map, nodes, ways, inp_camera, paths_out, inp_start, inp_goals, inp_accident_multiplier] + camera_rows + camera_way_rows + camera_severity_rows + camera_predictions_rows + camera_image_rows
+        inputs=[file_dropdown, inp_algorithm, is_show_ways, is_show_paths],
+        outputs=[map,nodes,ways,inp_camera, paths_out]+camera_rows+camera_way_rows+camera_severity_rows+camera_predictions_rows+camera_image_rows+[inp_start, inp_goals, inp_accident_multiplier]
     )
     inp_ai_model.change(image_classification.load_model, inp_ai_model, None)
     add_camera_btn.click(
@@ -313,8 +416,8 @@ with gr.Blocks() as demo:
         outputs=[inp_camera]
     ).then(
         pathFindingMap,
-        inputs=[nodes, ways, inp_camera, inp_start, inp_goals, inp_accident_multiplier, is_show_ways, is_show_paths],
-        outputs=[map, nodes, ways, inp_camera, paths_out, inp_start, inp_goals, inp_accident_multiplier] + camera_rows + camera_way_rows + camera_severity_rows + camera_predictions_rows + camera_image_rows
+        inputs=[nodes, ways, inp_camera, inp_start, inp_goals, inp_accident_multiplier, inp_algorithm, is_show_ways, is_show_paths],
+        outputs=[map,nodes,ways,inp_camera, paths_out]+camera_rows+camera_way_rows+camera_severity_rows+camera_predictions_rows+camera_image_rows
     )
     
     # Delete button event handlers
@@ -325,18 +428,10 @@ with gr.Blocks() as demo:
             outputs=[inp_camera]
         ).then(
             pathFindingMap,
-            inputs=[nodes, ways, inp_camera, inp_start, inp_goals, inp_accident_multiplier, is_show_ways, is_show_paths],
-            outputs=[map, nodes, ways, inp_camera, paths_out, inp_start, inp_goals, inp_accident_multiplier] + camera_rows + camera_way_rows + camera_severity_rows + camera_predictions_rows + camera_image_rows
+            inputs=[nodes, ways, inp_camera, inp_start, inp_goals, inp_accident_multiplier, inp_algorithm, is_show_ways, is_show_paths],
+            outputs=[map,nodes,ways,inp_camera, paths_out]+camera_rows+camera_way_rows+camera_severity_rows+camera_predictions_rows+camera_image_rows
         )
     
-    demo.load(
-        pathFindingMap,
-        [nodes, ways, inp_camera, inp_start, inp_goals, inp_accident_multiplier, is_show_ways, is_show_paths],
-        [map, nodes, ways, inp_camera, paths_out, inp_start, inp_goals, inp_accident_multiplier] + camera_rows + camera_way_rows + camera_severity_rows + camera_predictions_rows + camera_image_rows
-    )
-    btn.click(
-        pathFindingMap,
-        [nodes, ways, inp_camera, inp_start, inp_goals, inp_accident_multiplier, is_show_ways, is_show_paths],
-        [map, nodes, ways, inp_camera, paths_out, inp_start, inp_goals, inp_accident_multiplier] + camera_rows + camera_way_rows + camera_severity_rows + camera_predictions_rows + camera_image_rows
-    )
+    demo.load(pathFindingMap,[nodes, ways, inp_camera, inp_start, inp_goals, inp_accident_multiplier, inp_algorithm, is_show_ways, is_show_paths],[map,nodes,ways,inp_camera, paths_out]+camera_rows+camera_way_rows+camera_severity_rows+camera_predictions_rows+camera_image_rows)
+    btn.click(pathFindingMap,[nodes, ways, inp_camera, inp_start, inp_goals, inp_accident_multiplier, inp_algorithm, is_show_ways, is_show_paths],[map,nodes,ways,inp_camera, paths_out]+camera_rows+camera_way_rows+camera_severity_rows+camera_predictions_rows+camera_image_rows)
 demo.launch()

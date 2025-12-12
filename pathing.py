@@ -497,7 +497,7 @@ def draw_paths(fig, paths_list, nodes_df,ways_df, osm_nodes, snap_candidates, ro
     #Sort path by time (ascending)
     paths_list = sorted(paths_list, key=lambda p: p['time'])
 
-    def draw(path, path_index):
+    def draw(path, path_index): 
         if(path['time'] == float('inf')):
             return  # Skip paths with no valid route
 
