@@ -17,7 +17,7 @@ ROAD_LINE_WIDTH      = 4
 
 # AI Model Constants
 # List of available AI models. Add on more models here as needed.
-ENUM_AI_MODELS       =["EfficientNetV2B0", "ResNet50"]
+ENUM_AI_MODELS       =["MobileNetV2", "ResNet50", "Xception"]
 
 # Pathfinding Algorithm Constants
 ENUM_PATHFIND_ALGORITHMS = ["All Algorithms", "A*", "Beam Search", "BFS", "DFS", "Dijkstra", "GBFS"]

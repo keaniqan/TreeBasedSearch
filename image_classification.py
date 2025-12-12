@@ -12,12 +12,15 @@ def load_model(model_type: str):
     """  
     global model, preprocess
     # Based on the models defined in constants.ENUM_AI_MODELS load the appropriate model
-    if(model_type == "EfficientNetV2B0"):
-        file_path = "models/best_finetuned.keras"
-        preprocess = tf.keras.applications.efficientnet_v2.preprocess_input
+    if(model_type == "MobileNetV2"):
+        file_path = "models\\best_finetuned_mobilenetv2.keras"
+        preprocess = tf.keras.applications.mobilenet_v2.preprocess_input
     elif(model_type == "ResNet50"):#TOOD: TEMPORARARY TESTING, REPLACE WITH ACTUAL MODEL LATER
-        file_path = "models\\best_frozen.keras"
-        preprocess = tf.keras.applications.efficientnet_v2.preprocess_input
+        file_path = "models\\resnet_finetuned.keras"
+        preprocess = tf.keras.applications.resnet50.preprocess_input
+    elif(model_type == "Xception"):
+        file_path = "models\\xception_finetuned.keras"
+        preprocess = tf.keras.applications.xception.preprocess_input
     model = tf.keras.models.load_model(file_path)
     print(f"✅ Model '{model_type}' loaded from {file_path}")
 
