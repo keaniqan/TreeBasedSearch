@@ -25,4 +25,6 @@ ENUM_PATHFIND_ALGORITHMS = ["All Algorithms", "A*", "Beam Search", "BFS", "DFS",
 # Test cases
 TEST_CASE_FOLDER = "Test_Cases_Map"
 
+#Running app configurations
+OSM_FILEPATH = "map.osm"
 MAX_CAMERA_COUNT = 30

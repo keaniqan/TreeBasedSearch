@@ -295,7 +295,7 @@ def find_best_path_between_nodes(from_node, to_node, snap_candidates, road_graph
         
         # Check if snap candidates overlap (nodes very close together)
         if from_snaps & to_snaps:
-            print(f"  Nodes {from_node} → {to_node}: OVERLAP - using straight line")
+            # print(f"  Nodes {from_node} → {to_node}: OVERLAP - using straight line")
             return None, 0, True
         
         # Try to find best path among candidate combinations
@@ -312,10 +312,10 @@ def find_best_path_between_nodes(from_node, to_node, snap_candidates, road_graph
                         best_path = path
         
         if best_path and len(best_path) >= 2:
-            print(f"  Nodes {from_node} → {to_node}: ROUTED via {len(best_path)} OSM nodes, {best_length:.3f} km")
+            # print(f"  Nodes {from_node} → {to_node}: ROUTED via {len(best_path)} OSM nodes, {best_length:.3f} km")
             return best_path, best_length, False
         else:
-            print(f"  Nodes {from_node} → {to_node}: NO PATH - using straight line")
+            # print(f"  Nodes {from_node} → {to_node}: NO PATH - using straight line")
             return None, 0, True
     except Exception as e:
         print(f"  ERROR in find_best_path_between_nodes({from_node}, {to_node}): {e}")
@@ -332,8 +332,6 @@ def draw_snap_connections(fig, nodes_df, snap_candidates, osm_nodes):
         snap_candidates: Dictionary mapping node IDs to their snap candidates
         osm_nodes: Dictionary of OSM nodes
     """
-    print(f"\nDrawing snap connections...")
-    
     for node_id, node in nodes_df.iterrows():
         if node_id in snap_candidates and snap_candidates[node_id]:
             nearest_snap = snap_candidates[node_id][0]  # Get nearest snap point
@@ -404,7 +402,7 @@ def draw_assignment_ways(fig, ways_df, nodes_df, osm_nodes, snap_candidates, roa
             from_id = way['from']
             to_id = way['to']
             
-            print(f"\nWay {way_id}: {from_id} → {to_id}")
+            # print(f"\nWay {way_id}: {from_id} → {to_id}")
             
             osm_path, path_len, is_straight = find_best_path_between_nodes(
                 from_id, to_id, snap_candidates, road_graph
@@ -502,7 +500,7 @@ def draw_paths(fig, paths_list, nodes_df,ways_df, osm_nodes, snap_candidates, ro
             return  # Skip paths with no valid route
 
         node_ids = path['nodes']
-        print(f"\nPath {path_index}: {node_ids} (time: {path['time']})")
+        # print(f"\nPath {path_index}: {node_ids} (time: {path['time']})")
 
         #Generate lat/lon lists for the full path
         for i in range(len(node_ids) - 1):
@@ -568,5 +566,3 @@ def draw_paths(fig, paths_list, nodes_df,ways_df, osm_nodes, snap_candidates, ro
     for idx, alt_path in enumerate(paths_list[1:]):
         draw(alt_path, idx+1)
     draw(paths_list[0], 0)  # Draw main path last
-    
-    print(f"Drew {len(paths_list)} paths (1 main + {len(paths_list) - 1} alternates)")
