@@ -436,7 +436,7 @@ with gr.Blocks() as demo:
     file_dropdown.change(
         load_and_generate,
         inputs=[file_dropdown, inp_algorithm, is_show_ways, is_show_paths],
-        outputs=[map,nodes,ways,inp_camera, paths_out]+camera_rows+camera_way_rows+camera_severity_rows+camera_predictions_rows+camera_image_rows+[inp_start, inp_goals, inp_accident_multiplier]
+        outputs=[map,nodes,ways,inp_camera, paths_out, inp_start, inp_goals, inp_accident_multiplier]+camera_rows+camera_way_rows+camera_severity_rows+camera_predictions_rows+camera_image_rows
     )
     inp_ai_model.change(image_classification.load_model, inp_ai_model, None)
     add_camera_btn.click(
